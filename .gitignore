@@ -1,0 +1,27 @@
+# =========================
+# Python Cache
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# =========================
+# PyInstaller Build Artifacts
+# =========================
+build/
+dist/
+*.spec
+
+# =========================
+# App Specific Local Data
+# =========================
+# Ignore the local scan logs so you don't push testing data to GitHub
+scans_log.txt
+
+# =========================
+# OS Specific Files
+# =========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini

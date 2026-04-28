@@ -1,0 +1,11 @@
+# Serial communication with the Zenwire scanner
+pyserial>=3.5
+
+# System tray icon management
+pystray>=0.19.3
+
+# Image processing for the system tray icon
+Pillow>=10.0.0
+
+# Used for compiling the final .exe file
+pyinstaller>=6.0.0

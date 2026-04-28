@@ -1,0 +1,6 @@
+default 
+and:
+serial port
+usb virtual serial port
+manual mode
+speed: 1 second
