@@ -14,13 +14,15 @@ Scan the configuration codes in this exact order (reference `scanner settings to
 3. **Manual Mode** (If applicable to your scanning workflow)
 4. **Speed: 1 second** (Hardware-level buffer delay to ensure rapid-fire scans are processed cleanly)
 
-*Note: Ensure the scanner is connected via the physical USB cable, as wireless 2.4G dongles often force HID keyboard emulation regardless of configuration.*
+*Note: Ensure the scanner is configured and work as Virtual COM USB Device, scanners often force HID keyboard emulation as default.*
 
 ## Installation
 
 ### Prerequisites
 * Python 3.x
 * Git
+
+*Note: if you are using VS Code or Visual Studio, I highly recommend installing the [To Do Tasks](https://marketplace.visualstudio.com/items?itemName=sandy081.todotasks) extension for keeping upcoming and done tasks clean and organized.*
 
 ### Setup Process
 Clone the repository and install the required dependencies:
@@ -29,3 +31,24 @@ Clone the repository and install the required dependencies:
 git clone [https://github.com/YOUR_USERNAME/LabTrackQR.git](https://github.com/YOUR_USERNAME/LabTrackQR.git)
 cd LabTrackQR
 pip install -r requirements.txt
+```
+
+## Compiling to an Executable (.exe)
+
+To distribute LabTrackQR without requiring a local Python environment, you can compile the application into a standalone Windows executable (`.exe`) using **PyInstaller** (which is automatically installed during the Setup Process).
+
+### 1. Build the Executable
+Open your terminal in the root project folder (the folder containing `icon.png` and the `src` directory) and run the following command:
+
+`pyinstaller --onefile --noconsole --icon=icon.png --add-data "icon.png;." --paths src src\main.py`
+
+**Command Breakdown:**
+
+* `--onefile`: Compresses everything into a single `.exe` file.
+* `--noconsole`: Hides the black background terminal window when the app is running.
+* `--icon=icon.png`: Uses the custom logo for the desktop icon.
+* `--add-data "icon.png;."`: Bundles the image inside the `.exe` so the System Tray icon doesn't break.
+* `--paths src`: Tells the compiler where to find the rest of the Python modules (`config.py`, `overlay.py`, etc.).
+
+### 2. Locate your File
+Once the build process is complete, your packaged `main.exe` will be located inside the newly generated `dist/` folder. You can rename it to `LabTrackQR.exe` and move it anywhere on your PC!
