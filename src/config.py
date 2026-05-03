@@ -4,8 +4,8 @@
 ALLOWED_VIDS = [0x0483]
 ALLOWED_PIDS = [0x0115]
 
-# Simple local text file
-SAVE_PATH = "scans_log.txt"
+# Zmiana z .txt na .csv
+SAVE_PATH = "scans_log.csv"
 
 # Comunication rate for COM scanner
 BAUDRATE = 9600
