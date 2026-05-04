@@ -39,11 +39,10 @@ To distribute LabTrackQR without requiring a local Python environment, you can c
 
 ### 1. Build the Executable
 Open your terminal in the root project folder (the folder containing `icon.png` and the `src` directory) and run the following command:
-
-`pyinstaller --onefile --noconsole --icon=icon.png --add-data "icon.png;." --paths src src\main.py`
-
+```bash
+pyinstaller --onefile --noconsole --icon=icon.png --add-data "icon.png;." --paths src src\main.py
+```
 **Command Breakdown:**
-
 * `--onefile`: Compresses everything into a single `.exe` file.
 * `--noconsole`: Hides the black background terminal window when the app is running.
 * `--icon=icon.png`: Uses the custom logo for the desktop icon.

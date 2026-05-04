@@ -9,3 +9,6 @@ Pillow>=10.0.0
 
 # Used for compiling the final .exe file
 pyinstaller>=6.0.0
+
+# Safely lock the CSV file across multiple network clients
+filelock>=3.12.0

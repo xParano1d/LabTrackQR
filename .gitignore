@@ -15,8 +15,9 @@ dist/
 # =========================
 # App Specific Local Data
 # =========================
-# Ignore the local scan logs so you don't push testing data to GitHub
 scans_log.txt
+scans_log.csv
+*.csv
 
 # =========================
 # OS Specific Files

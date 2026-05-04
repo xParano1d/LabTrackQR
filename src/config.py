@@ -4,7 +4,7 @@
 ALLOWED_VIDS = [0x0483]
 ALLOWED_PIDS = [0x0115]
 
-# Zmiana z .txt na .csv
+# Name of the csv file for saving 
 SAVE_PATH = "scans_log.csv"
 
 # Comunication rate for COM scanner
