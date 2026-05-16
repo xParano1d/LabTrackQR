@@ -23,7 +23,7 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
-def setup_tray(root):
+def setup_tray(root, scanner_mgr):
     try:
         img_path = resource_path("icon.png") 
         image = Image.open(img_path)
@@ -33,22 +33,12 @@ def setup_tray(root):
     def trigger_new_sample_form(icon, item):
         message_queue.put("COMMAND:OPEN_FORM")
 
-    # Opens the live state
-    def open_inventory(icon, item):
-        try:
-            os.startfile(SAVE_PATH)
-        except Exception as e:
-            print(f"[Error] Could not open inventory file: {e}")
+    def trigger_removal_mode(icon, item):
+        scanner_mgr.removal_mode = True
+        message_queue.put("COMMAND:WAITING_FOR_REMOVAL_SCAN")
 
-    # Dynamically opens this month's log
-    def open_logs(icon, item):
-        month_str = datetime.now().strftime("%Y_%m")
-        history_file = f"history_log_{month_str}.csv"
-        try:
-            os.startfile(history_file)
-        except Exception:
-            # If the file hasn't been created yet this month
-            message_queue.put(f"No logs yet for {month_str}")
+    def trigger_log_viewer(icon, item):
+        message_queue.put("COMMAND:OPEN_LOG_VIEWER")
 
     def on_quit(icon, item):
         icon.stop()
@@ -56,10 +46,10 @@ def setup_tray(root):
         os._exit(0) 
 
     menu = pystray.Menu(
-        pystray.MenuItem("Add new item", trigger_new_sample_form),
+        pystray.MenuItem("Add new Sample", trigger_new_sample_form),
+        pystray.MenuItem("Remove Sample", trigger_removal_mode), 
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("View Inventory", open_inventory),
-        pystray.MenuItem("View History Logs", open_logs),
+        pystray.MenuItem("View Logs", trigger_log_viewer), 
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Quit", on_quit)
     )
@@ -68,17 +58,14 @@ def setup_tray(root):
     icon.run()
     
 if __name__ == "__main__":
-    # 1. Initialize Local CSV Storage & Hardware
     storage = CsvStorage(SAVE_PATH)
     scanner_mgr = ScannerManager(ALLOWED_VIDS, ALLOWED_PIDS, message_queue, storage)
-    
     scanner_mgr.start_monitoring()
 
-    # 2. Setup the Notification Manager
-    app = NotificationManager(message_queue, storage)
-
-    # 3. Start System Tray
-    threading.Thread(target=setup_tray, args=(app.root,), daemon=True).start()
-
-    # 4. Run the UI Loop
+    # Pass scanner_mgr into NotificationManager so it can cancel removal mode
+    app = NotificationManager(message_queue, storage, scanner_mgr)
+    
+    # Pass scanner_mgr into setup_tray so it can trigger removal mode
+    threading.Thread(target=setup_tray, args=(app.root, scanner_mgr), daemon=True).start()
+    
     app.run()

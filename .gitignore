@@ -18,6 +18,7 @@ dist/
 scans_log.txt
 scans_log.csv
 *.csv
+*.json
 
 # =========================
 # OS Specific Files

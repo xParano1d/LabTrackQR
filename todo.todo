@@ -1,6 +1,14 @@
-☐ filelock (with timeout) like mechanism and queue for sample adding action
-☐ form inputs for: sample name, category, desc/notes, user
+✔ filelock (with timeout) like mechanism and queue for sample adding action @done (5/17/2026, 12:10:34 AM)
+✔ form inputs for: sample name, category, desc/notes, user, SAMPLE ID @done (5/17/2026, 12:10:29 AM)
+☐ removed month and year from history contents (since it is already in the name of the file)
 ☐ form ui improvement needed
-☐ icon rework
-☐ NEW OPTION IN TRAY: REMOVE SAMPLE
-☐ 
+☐ small and main ICON Rework
+✔ NEW OPTION IN TRAY: REMOVE SAMPLE @done (5/17/2026, 12:10:09 AM)
+☐ offline history synchronization and multi user handling
+✔ Log Viewer @done (5/17/2026, 12:07:34 AM)
+☐ Log Viewer Search Filters and small rework (it has to be functional and more user friendly)
+☐ Whole History Viewer (because rn you can only see the local history)
+☐ implement "[Add new Sample] block" (when there isn't any registrated scanner detected)
+✔ open_new_sample_form validation @done (5/17/2026, 1:36:35 AM)
+☐ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ???
+☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ???

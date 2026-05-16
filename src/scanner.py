@@ -11,6 +11,7 @@ class ScannerManager:
         self.storage = storage  
         self.active_scanners = {}
         self.is_monitoring = True
+        self.removal_mode = False
 
     def start_monitoring(self):
         threading.Thread(target=self._monitor_loop, daemon=True).start()
@@ -26,7 +27,7 @@ class ScannerManager:
         for port in ports:
             if port.vid in self.allowed_vids and port.pid in self.allowed_pids:
                 if port.device not in self.active_scanners:
-                    scanner_node = ScannerNode(port.device, self.message_queue, self.storage)
+                    scanner_node = ScannerNode(port.device, port.hwid, self.message_queue, self.storage, manager=self)
                     self.active_scanners[port.device] = scanner_node
                     scanner_node.start_listening()
 
@@ -36,38 +37,39 @@ class ScannerManager:
             del self.active_scanners[port]
 
 class ScannerNode:
-    def __init__(self, port, message_queue, storage):
+    def __init__(self, port, hwid, message_queue, storage, manager=None):
         self.port = port
+        self.hwid = hwid 
         self.message_queue = message_queue
         self.storage = storage
+        self.manager = manager 
         self.is_running = True
+        self.user = "Unknown" 
         
-        # --- STATE MACHINE VARIABLES ---
         self.current_location = None
         self.pending_samples = []
-        
-        # --- INACTIVITY TIMER VARIABLES ---
         self.timeout_timer = None
         self.TIMEOUT_SECONDS = 10.0
 
     def _reset_state(self):
         """Called automatically if no scans occur within the timeout window."""
-        # Only notify and clear if there is actually data sitting in memory
-        if self.current_location or self.pending_samples:
-            self.current_location = None
+        # Only show the warning popup if the user actually had unsaved samples!
+        if self.pending_samples:
             self.pending_samples.clear()
-            self.message_queue.put("Session Timeout:\nLocation or sample was not scanned.")
+            self.current_location = None
+            self.message_queue.put("Scan Timeout:\nUnsaved samples cleared.")
+        elif self.current_location:
+            # If they only had a location saved, just clear it silently in the background
+            # so we don't annoy them with popups after a successful scan session.
+            self.current_location = None 
 
     def _start_or_refresh_timer(self):
-        """Restarts the countdown clock on every successful scan."""
         if self.timeout_timer:
             self.timeout_timer.cancel()
-            
         self.timeout_timer = threading.Timer(self.TIMEOUT_SECONDS, self._reset_state)
         self.timeout_timer.start()
 
     def _clear_timer(self):
-        """Safely shuts down the timer if the hardware is unplugged."""
         if self.timeout_timer:
             self.timeout_timer.cancel()
             self.timeout_timer = None
@@ -78,7 +80,13 @@ class ScannerNode:
     def _listen_loop(self):
         try:
             with serial.Serial(self.port, baudrate=9600, timeout=1) as ser:
-                self.message_queue.put(f"Connected on {self.port}\nReady to scan!")
+                
+                db_user = self.storage.get_user(self.hwid)
+                if db_user:
+                    self.user = db_user
+                    self.message_queue.put(f"Welcome {self.user}!\nReady to scan.")
+                else:
+                    self.message_queue.put(f"COMMAND:REGISTER_SCANNER:{self.hwid}")
                 
                 while self.is_running:
                     if ser.in_waiting > 0:
@@ -87,27 +95,31 @@ class ScannerNode:
                             scanned_text = raw_data.decode('utf-8').strip()
                             if not scanned_text: continue
 
-                            # --- RESTART THE 10-SECOND CLOCK ---
                             self._start_or_refresh_timer()
 
-                            # --- PREFIX PARSING LOGIC ---
+                            if self.manager and self.manager.removal_mode and scanned_text.startswith("SMP:"):
+                                self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}")
+                                self.manager.removal_mode = False 
+                                continue
+                            elif self.manager and self.manager.removal_mode:
+                                self.message_queue.put("Removal Error:\nPlease scan an SMP code.")
+                                self.manager.removal_mode = False
+                                continue
+
                             if scanned_text.startswith("LOC:"):
                                 self.current_location = scanned_text
                                 self.message_queue.put(f"Location Set:\n{self.current_location.replace('LOC:', '').strip()}")
                                 
-                                # If we scanned samples earlier, save them to this new location now
                                 for smp in self.pending_samples:
-                                    self.storage.save_data_async(location_id=self.current_location, sample_id=smp, user="Scanner Hardware", message_queue=self.message_queue)
+                                    self.storage.save_data_async(location_id=self.current_location, sample_id=smp, user=self.user, message_queue=self.message_queue)
                                 self.pending_samples.clear()
 
                             elif scanned_text.startswith("SMP:"):
                                 if self.current_location:
-                                    # We have a location, save immediately
-                                    self.storage.save_data_async(location_id=self.current_location, sample_id=scanned_text, user="Scanner Hardware", message_queue=self.message_queue)
+                                    self.storage.save_data_async(location_id=self.current_location, sample_id=scanned_text, user=self.user, message_queue=self.message_queue)
                                 else:
-                                    # No location yet, hold it in memory
                                     self.pending_samples.append(scanned_text)
-                                    self.message_queue.put(f"Scanned {scanned_text}\n Waiting for Location to save")
+                                    self.message_queue.put(f"Sample Queued:\n{scanned_text}\n(Scan Location to save)")
                             else:
                                 self.message_queue.put(f"Unknown Code:\n{scanned_text}")
 
@@ -117,4 +129,4 @@ class ScannerNode:
             self.message_queue.put(f"Scanner unplugged!\nWaiting for reconnect...")
         finally:
             self.is_running = False
-            self._clear_timer() # Clean up the background timer so it doesn't crash
+            self._clear_timer()

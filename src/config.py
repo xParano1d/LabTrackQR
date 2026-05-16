@@ -4,8 +4,11 @@
 ALLOWED_VIDS = [0x0483]
 ALLOWED_PIDS = [0x0115]
 
-# Name of the csv file for saving 
-SAVE_PATH = "scans_log.csv"
+# Name of the csv file for saving inventory
+SAVE_PATH = "inventory.csv"
+
+# File to store personalized scanner hardware mappings
+USERS_DB_PATH = "users.json"
 
 # Comunication rate for COM scanner
 BAUDRATE = 9600
