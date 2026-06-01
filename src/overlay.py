@@ -6,6 +6,9 @@ import sys
 import os
 import ctypes
 
+import qrcode
+from PIL import Image, ImageTk
+
 try:
     myappid = 'labtrack.qr.desktop.app.1' 
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
@@ -24,7 +27,6 @@ def resource_path(relative_path):
         return os.path.abspath(relative_path)
 
 class NotificationManager:
-    # Passed scanner_mgr so we can safely disable removal_mode on 'Cancel'
     def __init__(self, message_queue, storage=None, scanner_mgr=None):
         self.message_queue = message_queue
         self.storage = storage
@@ -58,22 +60,23 @@ class NotificationManager:
             if msg == "COMMAND:WAITING_FOR_REMOVAL_SCAN":
                 self.open_waiting_for_removal()
                 continue
-                
-            if isinstance(msg, str) and msg.startswith("COMMAND:REGISTER_SCANNER:"):
-                hwid = msg.replace("COMMAND:REGISTER_SCANNER:", "")
-                self.open_scanner_registration(hwid)
-                continue
-                
-            if isinstance(msg, str) and msg.startswith("COMMAND:SHOW_CODE:"):
-                code_text = msg.replace("COMMAND:SHOW_CODE:", "")
-                self.show_persistent_code_window(code_text)
+
+            if msg == "COMMAND:OPEN_USER_MANAGER":
+                self.open_user_manager()
                 continue
                 
             if isinstance(msg, str) and msg.startswith("COMMAND:CONFIRM_REMOVE:"):
                 if self.waiting_removal_win and self.waiting_removal_win.winfo_exists():
                     self.waiting_removal_win.destroy()
-                sample_id = msg.replace("COMMAND:CONFIRM_REMOVE:", "")
-                self.open_removal_confirmation(sample_id)
+                
+                raw_payload = msg.replace("COMMAND:CONFIRM_REMOVE:", "")
+                if "|" in raw_payload:
+                    sample_id, action_user = raw_payload.split("|")
+                else:
+                    sample_id = raw_payload
+                    action_user = "Unknown"
+                    
+                self.open_removal_confirmation(sample_id, action_user)
                 continue
                 
             if isinstance(msg, str):
@@ -83,8 +86,94 @@ class NotificationManager:
 
         self.root.after(50, self.check_queue)
 
+
+    def open_user_manager(self):
+        manager = tk.Toplevel(self.root)
+        manager.title("Employee Management")
+        manager.geometry("500x530")
+        manager.configure(bg="#f4f4f4")
+        manager.resizable(False, False)
+
+        manager.update_idletasks()
+        x = (manager.winfo_screenwidth() // 2) - (500 // 2)
+        y = (manager.winfo_screenheight() // 2) - (530 // 2)
+        manager.geometry(f'+{x}+{y}')
+
+        tk.Label(manager, text="Employee Database (Login Codes)", bg="#f4f4f4", font=("Segoe UI", 16, "bold"), fg="#011528").pack(pady=(15, 10))
+        
+        sel_frame = tk.Frame(manager, bg="#f4f4f4")
+        sel_frame.pack(fill=tk.X, padx=20, pady=5)
+        
+        tk.Label(sel_frame, text="Select Employee:", bg="#f4f4f4", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        
+        users_list = self.storage.get_employees() if self.storage else []
+        selected_user = tk.StringVar()
+        
+        combo = ttk.Combobox(sel_frame, textvariable=selected_user, values=users_list, state="readonly", font=("Segoe UI", 11), width=20)
+        combo.pack(side=tk.LEFT, padx=10)
+        if users_list:
+            combo.current(0)
+            
+        qr_frame = tk.Frame(manager, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc", width=250, height=250)
+        qr_frame.pack(pady=15)
+        qr_frame.pack_propagate(False)
+        
+        qr_label = tk.Label(qr_frame, bg="#ffffff")
+        qr_label.pack(expand=True)
+        
+        qr_text = tk.Label(manager, text="Select an employee and click Generate", bg="#f4f4f4", font=("Segoe UI", 10, "italic"), fg="#555")
+        qr_text.pack(pady=5)
+        
+        def generate_qr():
+            user = selected_user.get()
+            if not user: return
+            
+            qr = qrcode.QRCode(box_size=8, border=2)
+            qr.add_data(f"USR:{user}")
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            img = img.resize((230, 230), Image.Resampling.LANCZOS)
+            tk_img = ImageTk.PhotoImage(img)
+            
+            qr_label.config(image=tk_img)
+            qr_label.image = tk_img 
+            
+            qr_text.config(text=f"QR Code for: {user}", font=("Segoe UI", 11, "bold"), fg="#011528")
+
+        tk.Button(sel_frame, text="Show QR", command=generate_qr, bg="#011528", fg="white", font=("Segoe UI", 9, "bold"), relief="flat", width=10).pack(side=tk.LEFT, padx=5)
+
+        ttk.Separator(manager, orient='horizontal').pack(fill='x', padx=20, pady=15)
+        
+        add_frame = tk.Frame(manager, bg="#f4f4f4")
+        add_frame.pack(fill=tk.X, padx=20, pady=5)
+        
+        tk.Label(add_frame, text="Add New Employee:", bg="#f4f4f4", font=("Segoe UI", 11, "bold"), fg="#333").pack(anchor="w")
+        
+        input_frame = tk.Frame(add_frame, bg="#f4f4f4")
+        input_frame.pack(fill=tk.X, pady=5)
+        
+        new_name_entry = tk.Entry(input_frame, font=("Segoe UI", 11), width=23, relief="solid", bd=1)
+        new_name_entry.pack(side=tk.LEFT, ipady=3)
+        
+        def save_new_user():
+            raw_name = new_name_entry.get().strip().upper()
+            if raw_name:
+                formatted_name = raw_name.replace(" ", "_")
+                if self.storage:
+                    self.storage.add_employee(formatted_name)
+                    updated_users = self.storage.get_employees()
+                    combo['values'] = updated_users
+                    selected_user.set(formatted_name)
+                    
+                    new_name_entry.delete(0, tk.END)
+                    generate_qr() 
+                    self.spawn_notification(f"Employee Added:\n{formatted_name}")
+
+        tk.Button(input_frame, text="Save & Show QR", command=save_new_user, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat").pack(side=tk.LEFT, padx=10)
+
+
     def open_waiting_for_removal(self):
-        """Displays a persistent window instructing the user to scan something."""
         if self.waiting_removal_win and self.waiting_removal_win.winfo_exists():
             return
             
@@ -93,7 +182,6 @@ class NotificationManager:
         win.title("Removal Mode Active")
         win.geometry("400x160")
         
-        # Remove top bar and add a red border
         win.overrideredirect(True)
         win.configure(bg="#ffffff", highlightthickness=4, highlightbackground="#d9534f")
         win.attributes("-topmost", True)
@@ -115,12 +203,11 @@ class NotificationManager:
 
         tk.Button(win, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=15).pack(pady=10)
 
-    def open_removal_confirmation(self, sample_id):
+    def open_removal_confirmation(self, sample_id, action_user):
         win = tk.Toplevel(self.root)
         win.title("Confirm Removal")
         win.geometry("400x180")
         
-        # Remove top bar and add a red border
         win.overrideredirect(True)
         win.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#d9534f")
         win.attributes("-topmost", True)
@@ -139,7 +226,7 @@ class NotificationManager:
         def confirm():
             win.after_cancel(timeout_id)
             if self.storage:
-                self.storage.remove_data_async(sample_id, self.message_queue)
+                self.storage.remove_data_async(sample_id, action_user, self.message_queue)
             win.destroy()
 
         def cancel():
@@ -154,41 +241,12 @@ class NotificationManager:
         tk.Button(btn_frame, text="Confirm", command=confirm, bg="#d9534f", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
         tk.Button(btn_frame, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
 
-    def open_scanner_registration(self, hwid):
-        reg_win = tk.Toplevel(self.root)
-        reg_win.title("Scanner Registration")
-        reg_win.geometry("400x200")
-        reg_win.configure(bg="#ffffff")
-        reg_win.attributes("-topmost", True)
-        reg_win.resizable(False, False)
-
-        reg_win.update_idletasks()
-        x = (reg_win.winfo_screenwidth() // 2) - (400 // 2)
-        y = (reg_win.winfo_screenheight() // 2) - (200 // 2)
-        reg_win.geometry(f'+{x}+{y}')
-
-        tk.Label(reg_win, text="Unregistered Scanner Detected!", bg="#ffffff", fg="#d9534f", font=("Segoe UI", 12, "bold")).pack(pady=(15, 5))
-        tk.Label(reg_win, text="Who does this scanner belong to?", bg="#ffffff", fg="#333333", font=("Segoe UI", 10)).pack(pady=5)
-        
-        name_entry = tk.Entry(reg_win, width=30, justify="center", font=("Segoe UI", 11), relief="solid", bd=1)
-        name_entry.pack(pady=10, ipady=4)
-
-        def save_user():
-            username = name_entry.get().strip()
-            if username:
-                if self.storage:
-                    self.storage.register_user(hwid, username)
-                    self.spawn_notification(f"Scanner registered to:\n{username}")
-                reg_win.destroy()
-
-        tk.Button(reg_win, text="Register", command=save_user, bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=15).pack(pady=5)
-
     def open_new_sample_form(self):
         form = tk.Toplevel(self.root)
         form.title("Manual Sample Entry")
-        form.geometry("420x340")
+        # Powiększono okno żeby zmieścił się wybór usera
+        form.geometry("420x400")
         
-        # Remove top bar, add a subtle grey border
         form.overrideredirect(True)
         form.configure(bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc") 
         form.resizable(False, False) 
@@ -200,34 +258,35 @@ class NotificationManager:
         y = (form.winfo_screenheight() // 2) - (height // 2)
         form.geometry(f'{width}x{height}+{x}+{y}')
 
-        # Custom "X" Close Button
         close_btn = tk.Button(form, text="✕", command=form.destroy, bg="#ffffff", fg="#999999", font=("Segoe UI", 12, "bold"), relief="flat", activebackground="#ffcccc", cursor="hand2")
         close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
 
-        # --- NEW: STRICT INPUT VALIDATION ---
         def only_numbers(char):
-            # Allows only digits, or an empty string (so the user can delete characters)
             return char.isdigit() or char == ""
             
-        # Register the validation command with the form
         val_numbers = (form.register(only_numbers), '%P')
 
-        # 1. Sample ID (Restricted to Digits)
-        tk.Label(form, text="Sample ID (Numbers only, e.g. 123)", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(20, 2))
+        tk.Label(form, text="Sample ID (Numbers only, e.g. 123)", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(15, 2))
         entry_id = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1, validate="key", validatecommand=val_numbers)
         entry_id.pack(pady=5, ipady=4)
 
-        # 2. Sample Name
         tk.Label(form, text="Sample Name", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
         entry_name = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1)
         entry_name.pack(pady=5, ipady=4)
         
-        # 3. Description / Notes
         tk.Label(form, text="Description / Notes", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
         entry_notes = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1)
         entry_notes.pack(pady=5, ipady=4)
 
-        # Helper to clear the red error background when the user starts typing again
+        # WYBÓR PRACOWNIKA
+        tk.Label(form, text="Employee / User", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
+        users_list = self.storage.get_employees() if self.storage else ["Admin"]
+        if not users_list:
+            users_list = ["Admin"]
+        selected_user = tk.StringVar(value=users_list[0])
+        combo_user = ttk.Combobox(form, textvariable=selected_user, values=users_list, state="readonly", font=("Segoe UI", 11), width=36)
+        combo_user.pack(pady=5)
+
         def reset_bg(event):
             event.widget.config(bg="#ffffff")
             
@@ -238,32 +297,28 @@ class NotificationManager:
             id_raw = entry_id.get().strip()
             name_val = entry_name.get().strip()
             notes_val = entry_notes.get().strip()
+            user_val = selected_user.get()
             
-            # Final security check to ensure we have valid data
-            if id_raw.isdigit() and name_val: 
-                
-                # We assemble the perfect ID format so the user cannot mess it up
+            if id_raw.isdigit() and name_val and user_val: 
                 formatted_id = f"SMP:{id_raw}"
-                
                 if self.storage:
                     self.storage.save_data_async(
                         location_id="LOC: Manual-Entry", 
                         sample_id=formatted_id,
                         sample_name=name_val, 
                         desc_notes=notes_val, 
-                        user=self.storage.current_user, 
+                        user=user_val, # Terraz bierze usera z listy!
                         message_queue=self.message_queue,
                         force_create=True 
                     )
                 form.destroy()
             else:
-                # Trigger visual errors for empty/invalid fields
                 if not id_raw or not id_raw.isdigit(): 
                     entry_id.config(bg="#ffcccc")
                 if not name_val: 
                     entry_name.config(bg="#ffcccc")
 
-        tk.Button(form, text="Initialize Item", command=save_manual_entry, bg="#011528", fg="white", font=("Segoe UI", 11, "bold"), relief="flat", width=20, cursor="hand2").pack(pady=20)
+        tk.Button(form, text="Initialize Item", command=save_manual_entry, bg="#011528", fg="white", font=("Segoe UI", 11, "bold"), relief="flat", width=20, cursor="hand2").pack(pady=(15, 20))
 
     def _clean_and_iconify_location(self, loc_str):
         clean_str = loc_str.replace('LOC:', '').replace('LOC-', '').strip()
@@ -309,7 +364,6 @@ class NotificationManager:
         search_entry = tk.Entry(entry_border, textvariable=search_var, font=("Segoe UI", 10), width=25, relief="flat", bd=0)
         search_entry.pack(side=tk.LEFT, ipady=4, padx=8)
 
-        # --- UPDATED 7-COLUMN TREEVIEW ---
         columns = ("Date/Day", "Time", "Location", "Sample ID", "Name", "Notes", "User")
         tree = ttk.Treeview(viewer, columns=columns, show="headings", height=15)
         
@@ -352,8 +406,6 @@ class NotificationManager:
             for row in reversed(data):
                 if query and not any(query in str(cell).lower() for cell in row):
                     continue
-                
-                # Location is now at index 2 instead of 1!
                 row[2] = self._clean_and_iconify_location(str(row[2]))
                 tree.insert("", tk.END, values=row)
 

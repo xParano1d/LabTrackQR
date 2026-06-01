@@ -40,14 +40,19 @@ def setup_tray(root, scanner_mgr):
     def trigger_log_viewer(icon, item):
         message_queue.put("COMMAND:OPEN_LOG_VIEWER")
 
+    def trigger_user_manager(icon, item):
+        message_queue.put("COMMAND:OPEN_USER_MANAGER")
+
     def on_quit(icon, item):
         icon.stop()
         root.quit() 
         os._exit(0) 
 
     menu = pystray.Menu(
-        pystray.MenuItem("Add new Sample", trigger_new_sample_form),
+        pystray.MenuItem("Add New Sample", trigger_new_sample_form),
         pystray.MenuItem("Remove Sample", trigger_removal_mode), 
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Manage Employees (QR Codes)", trigger_user_manager),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("View Logs", trigger_log_viewer), 
         pystray.Menu.SEPARATOR,
@@ -62,10 +67,7 @@ if __name__ == "__main__":
     scanner_mgr = ScannerManager(ALLOWED_VIDS, ALLOWED_PIDS, message_queue, storage)
     scanner_mgr.start_monitoring()
 
-    # Pass scanner_mgr into NotificationManager so it can cancel removal mode
     app = NotificationManager(message_queue, storage, scanner_mgr)
-    
-    # Pass scanner_mgr into setup_tray so it can trigger removal mode
     threading.Thread(target=setup_tray, args=(app.root, scanner_mgr), daemon=True).start()
     
     app.run()

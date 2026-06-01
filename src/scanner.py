@@ -2,6 +2,8 @@ import serial
 import serial.tools.list_ports
 import threading
 import time
+import winsound 
+import re
 
 class ScannerManager:
     def __init__(self, vids, pids, message_queue, storage):
@@ -44,7 +46,8 @@ class ScannerNode:
         self.storage = storage
         self.manager = manager 
         self.is_running = True
-        self.user = "Unknown" 
+        
+        self.user = None 
         
         self.current_location = None
         self.pending_samples = []
@@ -52,15 +55,11 @@ class ScannerNode:
         self.TIMEOUT_SECONDS = 10.0
 
     def _reset_state(self):
-        """Called automatically if no scans occur within the timeout window."""
-        # Only show the warning popup if the user actually had unsaved samples!
         if self.pending_samples:
             self.pending_samples.clear()
             self.current_location = None
             self.message_queue.put("Scan Timeout:\nUnsaved samples cleared.")
         elif self.current_location:
-            # If they only had a location saved, just clear it silently in the background
-            # so we don't annoy them with popups after a successful scan session.
             self.current_location = None 
 
     def _start_or_refresh_timer(self):
@@ -81,24 +80,36 @@ class ScannerNode:
         try:
             with serial.Serial(self.port, baudrate=9600, timeout=1) as ser:
                 
-                db_user = self.storage.get_user(self.hwid)
-                if db_user:
-                    self.user = db_user
-                    self.message_queue.put(f"Welcome {self.user}!\nReady to scan.")
-                else:
-                    self.message_queue.put(f"COMMAND:REGISTER_SCANNER:{self.hwid}")
+                self.message_queue.put(f"Scanner Connected on {self.port}\nPlease scan your USR: badge.")
                 
                 while self.is_running:
                     if ser.in_waiting > 0:
                         raw_data = ser.readline()
                         try:
-                            scanned_text = raw_data.decode('utf-8').strip()
+                            raw_text = raw_data.decode('utf-8', errors='ignore').strip()
+                            if not raw_text: continue
+
+                            scanned_text = "".join(c for c in raw_text if c.isprintable()).strip()
+
+                            if "USR:" in scanned_text:
+                                raw_user = scanned_text.split("USR:")[1]
+                                self.user = raw_user.replace("$", "").strip()
+                                self.message_queue.put(f"Login Successful:\nWelcome {self.user}!")
+                                continue
+
+                            scanned_text = re.sub(r'^\][A-Za-z][0-9A-Za-z]', '', scanned_text).strip()
                             if not scanned_text: continue
+
+                            if self.user is None:
+                                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                                # TUTAJ BYŁ BŁĄD - Zmieniono "Otrzymano:" na "Received:"
+                                self.message_queue.put(f"ACCESS DENIED:\nReceived: '{scanned_text}'")
+                                continue
 
                             self._start_or_refresh_timer()
 
                             if self.manager and self.manager.removal_mode and scanned_text.startswith("SMP:"):
-                                self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}")
+                                self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}|{self.user}")
                                 self.manager.removal_mode = False 
                                 continue
                             elif self.manager and self.manager.removal_mode:
@@ -126,7 +137,7 @@ class ScannerNode:
                         except UnicodeDecodeError:
                             pass
         except serial.SerialException:
-            self.message_queue.put(f"Scanner unplugged!\nWaiting for reconnect...")
+            self.message_queue.put(f"Scanner {self.port} unplugged!")
         finally:
             self.is_running = False
             self._clear_timer()
