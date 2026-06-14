@@ -19,7 +19,7 @@ Scan the configuration codes in this exact order (reference `scanner settings to
 ## Installation
 
 ### Prerequisites
-* Python 3.x
+* Python 3.x+
 * Git
 
 *Note: if you are using VS Code or Visual Studio, I highly recommend installing the [To Do Tasks](https://marketplace.visualstudio.com/items?itemName=sandy081.todotasks) extension for keeping upcoming and done tasks clean and organized.*
@@ -28,7 +28,7 @@ Scan the configuration codes in this exact order (reference `scanner settings to
 Clone the repository and install the required dependencies:
 
 ```bash
-git clone [https://github.com/YOUR_USERNAME/LabTrackQR.git](https://github.com/YOUR_USERNAME/LabTrackQR.git)
+git clone [https://github.com/xParano1d/LabTrackQR.git](https://github.com/xParano1d/LabTrackQR.git)
 cd LabTrackQR
 pip install -r requirements.txt
 ```
@@ -38,15 +38,15 @@ pip install -r requirements.txt
 To distribute LabTrackQR without requiring a local Python environment, you can compile the application into a standalone Windows executable (`.exe`) using **PyInstaller** (which is automatically installed during the Setup Process).
 
 ### 1. Build the Executable
-Open your terminal in the root project folder (the folder containing `icon.png` and the `src` directory) and run the following command:
+Open your terminal in the root project folder (the folder containing `appicon.png` and the `src` directory) and run the following command:
 ```bash
-pyinstaller --onefile --noconsole --icon=icon.png --add-data "icon.png;." --paths src src\main.py
+pyinstaller --onefile --noconsole --icon=icon.ico --add-data "icon.ico;." --paths src src\main.py
 ```
 **Command Breakdown:**
 * `--onefile`: Compresses everything into a single `.exe` file.
 * `--noconsole`: Hides the black background terminal window when the app is running.
-* `--icon=icon.png`: Uses the custom logo for the desktop icon.
-* `--add-data "icon.png;."`: Bundles the image inside the `.exe` so the System Tray icon doesn't break.
+* `--icon=icon.ico`: Uses the custom logo for the desktop icon.
+* `--add-data "icon.ico;."`: Bundles the image inside the `.exe` so the System Tray icon doesn't break.
 * `--paths src`: Tells the compiler where to find the rest of the Python modules (`config.py`, `overlay.py`, etc.).
 
 ### 2. Locate your File

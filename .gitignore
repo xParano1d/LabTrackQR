@@ -9,7 +9,7 @@ __pycache__/
 # PyInstaller Build Artifacts
 # =========================
 build/
-dist/
+# dist/
 *.spec
 
 # =========================

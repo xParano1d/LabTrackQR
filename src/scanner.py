@@ -1,8 +1,8 @@
 import serial
 import serial.tools.list_ports
 import threading
-import time
 import winsound 
+import time
 import re
 
 class ScannerManager:
@@ -48,6 +48,7 @@ class ScannerNode:
         self.is_running = True
         
         self.user = None 
+        self.badge_pattern = re.compile(r"^ID:\s*(\d{8})$")
         
         self.current_location = None
         self.pending_samples = []
@@ -80,7 +81,7 @@ class ScannerNode:
         try:
             with serial.Serial(self.port, baudrate=9600, timeout=1) as ser:
                 
-                self.message_queue.put(f"Scanner Connected on {self.port}\nPlease scan your USR: badge.")
+                self.message_queue.put(f"Scanner Connected on {self.port}\nPlease scan your ID badge.")
                 
                 while self.is_running:
                     if ser.in_waiting > 0:
@@ -91,10 +92,29 @@ class ScannerNode:
 
                             scanned_text = "".join(c for c in raw_text if c.isprintable()).strip()
 
-                            if "USR:" in scanned_text:
-                                raw_user = scanned_text.split("USR:")[1]
-                                self.user = raw_user.replace("$", "").strip()
-                                self.message_queue.put(f"Login Successful:\nWelcome {self.user}!")
+                            if scanned_text == "CMD:LOGOUT":
+                                if self.user:
+                                    self.message_queue.put(f"Logged Out:\nGoodbye {self.user}.")
+                                    self.user = None
+                                    self._reset_state()
+                                continue
+                                
+                            badge_match = self.badge_pattern.match(scanned_text)
+                            if badge_match:
+                                badge_id = badge_match.group(1) 
+                                emp_name = self.storage.get_employee_name(badge_id)
+                                
+                                if emp_name:
+                                    if self.user and self.user != emp_name:
+                                        winsound.MessageBeep(winsound.MB_ICONHAND)
+                                        self.message_queue.put(f"Access Denied:\nIn use by {self.user}.")
+                                        continue
+
+                                    self.user = emp_name
+                                    self.message_queue.put(f"Login Successful:\nWelcome {self.user}!")
+                                else:
+                                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                                    self.message_queue.put(f"COMMAND:UNKNOWN_BADGE:{badge_id}")
                                 continue
 
                             scanned_text = re.sub(r'^\][A-Za-z][0-9A-Za-z]', '', scanned_text).strip()
@@ -102,18 +122,28 @@ class ScannerNode:
 
                             if self.user is None:
                                 winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-                                # TUTAJ BYŁ BŁĄD - Zmieniono "Otrzymano:" na "Received:"
-                                self.message_queue.put(f"ACCESS DENIED:\nReceived: '{scanned_text}'")
+                                self.message_queue.put("COMMAND:SHOW_LOCK_SCREEN")
                                 continue
 
                             self._start_or_refresh_timer()
 
+                            # --- THE REMOVAL VALIDATION GATE ---
                             if self.manager and self.manager.removal_mode and scanned_text.startswith("SMP:"):
-                                self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}|{self.user}")
+                                scanned_text = scanned_text.replace("SMP: ", "SMP:")
+                                
+                                if not self.storage.sample_exists(scanned_text):
+                                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                                    self.message_queue.put(f"Removal Error:\n{scanned_text} is not in the system.")
+                                    self.manager.removal_mode = False 
+                                    continue
+                                
+                                sample_name = self.storage.get_sample_name(scanned_text)
+                                self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}|{self.user}|{sample_name}")
                                 self.manager.removal_mode = False 
                                 continue
+                                
                             elif self.manager and self.manager.removal_mode:
-                                self.message_queue.put("Removal Error:\nPlease scan an SMP code.")
+                                self.message_queue.put("Removal Error:\nPlease scan a valid SMP code.")
                                 self.manager.removal_mode = False
                                 continue
 
@@ -126,6 +156,13 @@ class ScannerNode:
                                 self.pending_samples.clear()
 
                             elif scanned_text.startswith("SMP:"):
+                                scanned_text = scanned_text.replace("SMP: ", "SMP:")
+
+                                if not self.storage.sample_exists(scanned_text):
+                                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                                    self.message_queue.put(f"Validation Error:\n{scanned_text} is not initialized!")
+                                    continue
+
                                 if self.current_location:
                                     self.storage.save_data_async(location_id=self.current_location, sample_id=scanned_text, user=self.user, message_queue=self.message_queue)
                                 else:

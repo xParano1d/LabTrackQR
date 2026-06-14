@@ -1,14 +1,22 @@
 ✔ filelock (with timeout) like mechanism and queue for sample adding action @done (5/17/2026, 12:10:34 AM)
 ✔ form inputs for: sample name, category, desc/notes, user, SAMPLE ID @done (5/17/2026, 12:10:29 AM)
-☐ removed month and year from history contents (since it is already in the name of the file)
-☐ form ui improvement needed
-☐ small and main ICON Rework
+✔ removed month and year from history contents (since it is already in the name of the file) @done (6/1/2026, 1:36:07 PM)
+✔ form ui improvement needed @low @done (6/14/2026, 12:23:43 AM)
+☐ small and main ICON Rework @high 
 ✔ NEW OPTION IN TRAY: REMOVE SAMPLE @done (5/17/2026, 12:10:09 AM)
-☐ offline history synchronization and multi user handling
+☐ offline history synchronization @critical #inFuture
+✔ multi user handling @done (6/14/2026, 12:24:39 AM)
 ✔ Log Viewer @done (5/17/2026, 12:07:34 AM)
 ☐ Log Viewer Search Filters and small rework (it has to be functional and more user friendly)
-☐ Whole History Viewer (because rn you can only see the local history)
-☐ implement "[Add new Sample] block" (when there isn't any registrated scanner detected)
+☐ Whole History Viewer (because rn you can only see the local history) @critical #inFuture
+✔ implement "[Add new Sample] block" (when there isn't any registrated scanner detected) @high @done (6/13/2026, 10:42:27 PM)
 ✔ open_new_sample_form validation @done (5/17/2026, 1:36:35 AM)
-☐ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ???
-☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ???
+✘ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ??? @cancelled (6/13/2026, 2:21:16 AM)
+☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
+
+✔ USR: prefix for login @done (6/13/2026, 10:42:19 PM)
+☐ prepare instruction for scanner configuration @high
+✔ launch on windows startup option or by default @high @done (6/14/2026, 1:23:41 AM)
+☐ create a popup after app starts @high 
+
+✔ fix the width of [View Logs] window @done (6/14/2026, 12:23:50 AM)
