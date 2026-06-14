@@ -2,7 +2,7 @@
 ✔ form inputs for: sample name, category, desc/notes, user, SAMPLE ID @done (5/17/2026, 12:10:29 AM)
 ✔ removed month and year from history contents (since it is already in the name of the file) @done (6/1/2026, 1:36:07 PM)
 ✔ form ui improvement needed @low @done (6/14/2026, 12:23:43 AM)
-☐ small and main ICON Rework @high 
+✔ small and main ICON Rework @high @done (6/14/2026, 6:33:34 PM)
 ✔ NEW OPTION IN TRAY: REMOVE SAMPLE @done (5/17/2026, 12:10:09 AM)
 ☐ offline history synchronization @critical #inFuture
 ✔ multi user handling @done (6/14/2026, 12:24:39 AM)
@@ -20,3 +20,5 @@
 ☐ create a popup after app starts @high 
 
 ✔ fix the width of [View Logs] window @done (6/14/2026, 12:23:50 AM)
+
+☐ alerts about samples that sit inside system for too long
