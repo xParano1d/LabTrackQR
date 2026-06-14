@@ -13,12 +13,10 @@
 ✔ open_new_sample_form validation @done (5/17/2026, 1:36:35 AM)
 ✘ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ??? @cancelled (6/13/2026, 2:21:16 AM)
 ☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
-
-✔ USR: prefix for login @done (6/13/2026, 10:42:19 PM)
-☐ prepare instruction for scanner configuration @high
-✔ launch on windows startup option or by default @high @done (6/14/2026, 1:23:41 AM)
-☐ create a popup after app starts @high 
-
 ✔ fix the width of [View Logs] window @done (6/14/2026, 12:23:50 AM)
+✔ USR: prefix for login @done (6/13/2026, 10:42:19 PM)
+✔ launch on windows startup option or by default @high @done (6/14/2026, 1:23:41 AM)
+✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 
-☐ alerts about samples that sit inside system for too long
+☐ prepare instruction for scanner configuration @high
+☐ alerts about samples that sit inside system for too long @high 
