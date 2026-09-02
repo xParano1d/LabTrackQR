@@ -8,9 +8,9 @@ ALLOWED_PIDS = [0x0115]
 BAUDRATE = 9600
 
 # --- File Save Paths ---
-SAVE_PATH = "inventory.csv"
-EMPLOYEES_PATH = "employees.json"
-HISTORY_DIR = "history_logs" 
+SAVE_PATH = "Z:\\Sample Tracking Tool\\inventory.csv"
+EMPLOYEES_PATH = "Z:\\Sample Tracking Tool\\employees.json"
+HISTORY_DIR = "Z:\\Sample Tracking Tool\\history_logs" 
 
 # --- Network Synchronization ---
 # Change this to your NAS or Network Drive path (e.g., r"Z:\LabTrack_Backups")

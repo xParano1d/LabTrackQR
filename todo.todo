@@ -4,19 +4,25 @@
 ✔ form ui improvement needed @low @done (6/14/2026, 12:23:43 AM)
 ✔ small and main ICON Rework @high @done (6/14/2026, 6:33:34 PM)
 ✔ NEW OPTION IN TRAY: REMOVE SAMPLE @done (5/17/2026, 12:10:09 AM)
-☐ offline history synchronization @critical #inFuture
 ✔ multi user handling @done (6/14/2026, 12:24:39 AM)
 ✔ Log Viewer @done (5/17/2026, 12:07:34 AM)
-☐ Log Viewer Search Filters and small rework (it has to be functional and more user friendly)
-☐ Whole History Viewer (because rn you can only see the local history) @critical #inFuture
 ✔ implement "[Add new Sample] block" (when there isn't any registrated scanner detected) @high @done (6/13/2026, 10:42:27 PM)
 ✔ open_new_sample_form validation @done (5/17/2026, 1:36:35 AM)
 ✘ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ??? @cancelled (6/13/2026, 2:21:16 AM)
-☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
 ✔ fix the width of [View Logs] window @done (6/14/2026, 12:23:50 AM)
 ✔ USR: prefix for login @done (6/13/2026, 10:42:19 PM)
 ✔ launch on windows startup option or by default @high @done (6/14/2026, 1:23:41 AM)
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
-
-☐ prepare instruction for scanner configuration @high
 ☐ alerts about samples that sit inside system for too long @high 
+☐ white/black icon depending on OS theme @high 
+☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
+☐ Log Viewer Search Filters and small rework (it has to be functional and more user friendly)@low
+☐ offline history synchronization @critical @today
+☐ Whole History Viewer (because rn you can only see actual month history) @critical @today
+☐ SERVER AND CLIENT SEPARATION @today 
+    ☐ make whole database of users around lab and stick new user init to server only
+    ☐ Server configuration (path etc.)
+    ☐ pop-up account synchronization (session sharing)
+☐ graphical style revamp to fit thmx palette @low 
+☐ mapped storage??? like visualization of storage and where things are etc. @low
+☐ prepare instruction for scanner configuration @critical 

@@ -6,7 +6,7 @@ import pystray
 import sys
 import os
 import winreg
-from PIL import Image
+from PIL import Image, ImageOps
 
 from config import ALLOWED_VIDS, ALLOWED_PIDS, SAVE_PATH, EMPLOYEES_PATH, HISTORY_DIR, NETWORK_SYNC_PATH, SYNC_INTERVAL_SECONDS
 from local_storage import CsvStorage
@@ -55,13 +55,37 @@ def is_autostart_enabled():
     except FileNotFoundError:
         return False
 
+# --- NEW: DETECT TASKBAR THEME ---
+def is_taskbar_dark_mode():
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+        value, _ = winreg.QueryValueEx(key, "SystemUsesLightTheme")
+        winreg.CloseKey(key)
+        # If SystemUsesLightTheme is 0, the taskbar is dark.
+        return value == 0
+    except FileNotFoundError:
+        return True # Default to dark mode if the registry key doesn't exist
+
 # Application State
 state = {'autostart': is_autostart_enabled()}
 
 def setup_tray(root, scanner_mgr):
     try:
         img_path = resource_path("icon.ico") 
-        image = Image.open(img_path)
+        # Convert to RGBA to ensure we have the transparency (Alpha) channel
+        image = Image.open(img_path).convert("RGBA")
+        
+        # If the user has a Light Mode taskbar, invert the white logo to black
+        if not is_taskbar_dark_mode():
+            # 1. Split the image into Red, Green, Blue, and Alpha (Transparency)
+            r, g, b, a = image.split()
+            # 2. Merge just the colors and invert them (White becomes Black)
+            rgb_image = Image.merge('RGB', (r, g, b))
+            inverted_rgb = ImageOps.invert(rgb_image)
+            # 3. Split the new inverted colors and merge them back with the original transparency
+            r2, g2, b2 = inverted_rgb.split()
+            image = Image.merge('RGBA', (r2, g2, b2, a))
+            
     except FileNotFoundError:
         image = Image.new('RGB', (64, 64), color = (73, 109, 137))
 
