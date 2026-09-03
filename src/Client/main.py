@@ -6,10 +6,11 @@ import pystray
 import sys
 import os
 import winreg
-from PIL import Image, ImageOps
+from PIL import Image
+import getpass
 
-from config import ALLOWED_VIDS, ALLOWED_PIDS, SAVE_PATH, EMPLOYEES_PATH, HISTORY_DIR, NETWORK_SYNC_PATH, SYNC_INTERVAL_SECONDS
-from local_storage import CsvStorage
+from config import ALLOWED_VIDS, ALLOWED_PIDS, SERVER_URL
+from local_storage import ApiStorage
 from scanner import ScannerManager
 from overlay import NotificationManager
 
@@ -120,8 +121,21 @@ def setup_tray(root, scanner_mgr):
     icon.run()
     
 if __name__ == "__main__":
-    storage = CsvStorage(SAVE_PATH, EMPLOYEES_PATH, HISTORY_DIR, NETWORK_SYNC_PATH, SYNC_INTERVAL_SECONDS)
+    storage = ApiStorage(SERVER_URL)
+    
+    # --- THE AD AUTO-LOGIN LOGIC ---
+    ad_username = getpass.getuser()
+    ad_employee_data = storage.get_employee_by_ad(ad_username)
+    
     scanner_mgr = ScannerManager(ALLOWED_VIDS, ALLOWED_PIDS, message_queue, storage)
+    
+    # Inject AD user if they exist in the DB, otherwise queue Registration
+    if ad_employee_data:
+        scanner_mgr.ad_fallback_name = ad_employee_data.get('full_name')
+    else:
+        # User is brand new. Queue a specialized prompt to register their Windows account.
+        message_queue.put(f"COMMAND:REGISTER_AD_USER:{ad_username}")
+
     scanner_mgr.start_monitoring()
 
     app = NotificationManager(message_queue, storage, scanner_mgr)

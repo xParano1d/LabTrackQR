@@ -31,6 +31,18 @@ class LabTrackAPI:
             emps = self.storage.get_employees()
             return jsonify({"employees": emps}), 200
 
+        @self.app.route('/api/add_employee', methods=['POST'])
+        def add_employee():
+            """Receives a new user registration from the Client."""
+            data = request.json
+            self.storage.add_employee(
+                data.get('badge_id'), 
+                data.get('first_name'), 
+                data.get('last_name'), 
+                data.get('ad_username', '')
+            )
+            return jsonify({"status": "success"}), 200
+
         @self.app.route('/api/log_sample', methods=['POST'])
         def log_sample():
             """Receives a scanned sample from a Client."""

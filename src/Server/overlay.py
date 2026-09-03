@@ -15,16 +15,15 @@ try:
 except Exception:
     pass
 
-def resource_path(relative_path):
+def resource_path(file_name):
     try:
+        # COMPILED .exe MODE: PyInstaller extracts everything to the root of _MEIPASS
         base_path = sys._MEIPASS
-        return os.path.join(base_path, relative_path)
+        return os.path.join(base_path, file_name)
     except Exception:
-        if os.path.exists(relative_path):
-            return os.path.abspath(relative_path)
-        elif os.path.exists(os.path.join("..", relative_path)):
-            return os.path.abspath(os.path.join("..", relative_path))
-        return os.path.abspath(relative_path)
+        # DEVELOPMENT MODE: Calculate path from this script (src/Client) up to the img folder
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(script_dir, "..", "..", "img", file_name)
 
 class NotificationManager:
     def __init__(self, message_queue, storage=None, scanner_mgr=None):
@@ -37,7 +36,7 @@ class NotificationManager:
         self.root = tk.Tk()
         
         try:
-            self.root.iconbitmap(default=resource_path("..\\..\\img\\icon_white.ico"))
+            self.root.iconbitmap(default=resource_path("icon_white.ico"))
         except Exception as e:
             print(f"Icon failed to load: {e}")
             
@@ -87,7 +86,7 @@ class NotificationManager:
         # --- THE LOGO INTEGRATION ---
         try:
             # 1. Open your universal icon
-            original_img = Image.open(resource_path("..\\..\\img\\icon_white.ico"))
+            original_img = Image.open(resource_path("icon_white.ico"))
             # 2. Resize it to a crisp 80x80 for the center of the screen
             resized_img = original_img.resize((80, 80), Image.Resampling.LANCZOS)
             # 3. Save as 'self.splash_logo' so Tkinter doesn't delete it from memory!

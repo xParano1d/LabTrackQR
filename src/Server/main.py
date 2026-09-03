@@ -18,10 +18,15 @@ from server_api import LabTrackAPI
 
 message_queue = queue.Queue()
 
-def resource_path(relative_path):
-    try: base_path = sys._MEIPASS
-    except Exception: base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+def resource_path(file_name):
+    try:
+        # COMPILED .exe MODE: PyInstaller extracts everything to the root of _MEIPASS
+        base_path = sys._MEIPASS
+        return os.path.join(base_path, file_name)
+    except Exception:
+        # DEVELOPMENT MODE: Calculate path from this script (src/Client) up to the img folder
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(script_dir, "..", "..", "img", file_name)
 
 # --- WINDOWS STARTUP REGISTRY LOGIC ---
 REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -61,9 +66,9 @@ state = {'autostart': is_autostart_enabled()}
 def setup_tray(root):
     try:        
         if is_taskbar_dark_mode():
-            image = Image.open(resource_path("..\\..\\img\\icon_white.ico")).convert("RGBA")
+            image = Image.open(resource_path("icon_white.ico")).convert("RGBA")
         else:
-            image = Image.open(resource_path("..\\..\\img\\icon_black.ico")).convert("RGBA")
+            image = Image.open(resource_path("icon_black.ico")).convert("RGBA")
     except FileNotFoundError:
         image = Image.new('RGB', (64, 64), color = (73, 109, 137))
 

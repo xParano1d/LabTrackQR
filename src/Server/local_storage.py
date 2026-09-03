@@ -13,7 +13,8 @@ class CsvStorage:
         self.history_dir = history_dir
         self.sync_path = sync_path
         self.sync_interval = sync_interval
-        
+
+        self.recent_scans = {} # Tracks recent hashes to block duplicates
         self.lock = threading.Lock()
         self._ensure_files_exist()
         
@@ -151,8 +152,20 @@ class CsvStorage:
     def _save_data(self, location_id, sample_id, user, message_queue, sample_name, desc_notes, force_create):
         sample_name = sample_name.replace('\n', ' | ').replace('\r', '')
         desc_notes = desc_notes.replace('\n', ' | ').replace('\r', '')
-
+        
         with self.lock:
+            # --- DEDUPLICATION FILTER ---
+            if not hasattr(self, 'recent_scans'):
+                self.recent_scans = {}
+            
+            scan_signature = f"{sample_id}_{user}_{location_id}"
+            current_time = time.time()
+            if scan_signature in self.recent_scans:
+                if current_time - self.recent_scans[scan_signature] < 3.0:
+                    return  # Silently discard duplicate packet received within 3 seconds
+            self.recent_scans[scan_signature] = current_time
+            # ----------------------------
+
             now = datetime.now()
             date_str, time_str = now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S")
             rows_to_keep = []

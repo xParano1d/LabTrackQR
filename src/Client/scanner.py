@@ -187,6 +187,7 @@ class ScannerNode:
 
                                 if self.current_location:
                                     self.storage.save_data_async(location_id=self.current_location, sample_id=scanned_text, user=self.user, message_queue=self.message_queue)
+                                    self.current_location = None
                                 else:
                                     self.pending_samples.append(scanned_text)
                                     self.message_queue.put(f"Sample Queued:\n{scanned_text}\n(Scan Location to save)")

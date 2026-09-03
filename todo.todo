@@ -14,19 +14,20 @@
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 ✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
 ☐ prepare instruction for scanner configuration @critical 
-☐ offline history synchronization @critical
+✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
 ☐ Log Viewer Search Filters and small rework (it has to be functional and more user friendly) @low
 ☐ graphical style revamp to fit thmx palette @low migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ??? @cancelled (6/13/2026, 2:21:16 AM)
 ☐ alerts about samples that sit inside system for too long @high 
 ☐ Whole History Viewer (because rn you can only see actual month history) @critical @today
 ☐ mapped storage??? like visualization of storage and where things are etc. @low
-
-☐ SERVER AND CLIENT SEPARATION @today 
+✔ SERVER AND CLIENT SEPARATION @today @done (9/3/2026, 3:54:06 PM)
 SERVER:
-    ☐ Server configuration after first launch (path etc.) [and some protection if path is not present then point to config again]
+    ✔ Server configuration after first launch (path etc.) [and some protection if path is not present then point to config again] @done (9/3/2026, 3:54:46 PM)
     ☐ make whole database of users around lab and stick with new user init to server only
 CLIENT:
-    ☐ doesnt create folders
-    ☐ only read write existing log files [and some protection if path is not present then point to config again]
+    ✔ doesnt create folders @done (9/3/2026, 3:56:11 PM)
+    ✔ only read write existing log files [and some protection if path is not present then point to config again] @done (9/3/2026, 3:56:15 PM)
     ✘ pop-up account synchronization (session sharing flask username = request.environ.get('REMOTE_USER') if username then login else access denied) @cancelled (9/3/2026, 11:22:53 AM)
+    ☐ one and more login sessions handling
+    

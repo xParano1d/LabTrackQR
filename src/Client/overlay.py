@@ -86,7 +86,7 @@ class NotificationManager:
         # --- THE LOGO INTEGRATION ---
         try:
             # 1. Open your universal icon
-            original_img = Image.open(resource_path("img\\icon_white.ico"))
+            original_img = Image.open(resource_path("icon_white.ico"))
             # 2. Resize it to a crisp 80x80 for the center of the screen
             resized_img = original_img.resize((80, 80), Image.Resampling.LANCZOS)
             # 3. Save as 'self.splash_logo' so Tkinter doesn't delete it from memory!
