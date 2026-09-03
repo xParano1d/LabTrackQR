@@ -17,6 +17,7 @@ build/
 # =========================
 scans_log.txt
 scans_log.csv
+name.py
 *.csv
 *.json
 
