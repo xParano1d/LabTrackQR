@@ -83,7 +83,7 @@ def setup_tray(root):
         os._exit(0) 
 
     menu = pystray.Menu(
-        pystray.MenuItem("View Logs & History", trigger_log_viewer), 
+        pystray.MenuItem("View Logs History", trigger_log_viewer), 
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Manage Employee Badges", trigger_user_manager),
         pystray.Menu.SEPARATOR,

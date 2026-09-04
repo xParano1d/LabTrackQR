@@ -1,0 +1,37 @@
+✔ filelock (with timeout) like mechanism and queue for sample adding action @done (5/17/2026, 12:10:34 AM)
+✔ form inputs for: sample name, category, desc/notes, user, SAMPLE ID @done (5/17/2026, 12:10:29 AM)
+✔ removed month and year from history contents (since it is already in the name of the file) @done (6/1/2026, 1:36:07 PM)
+✔ form ui improvement needed @low @done (6/14/2026, 12:23:43 AM)
+✔ small and main ICON Rework @high @done (6/14/2026, 6:33:34 PM)
+✔ NEW OPTION IN TRAY: REMOVE SAMPLE @done (5/17/2026, 12:10:09 AM)
+✔ multi user handling @done (6/14/2026, 12:24:39 AM)
+✔ Log Viewer @done (5/17/2026, 12:07:34 AM)
+✔ implement "[Add new Sample] block" (when there isn't any registrated scanner detected) @high @done (6/13/2026, 10:42:27 PM)
+✔ open_new_sample_form validation @done (5/17/2026, 1:36:35 AM)
+✔ fix the width of [View Logs] window @done (6/14/2026, 12:23:50 AM)
+✔ USR: prefix for login @done (6/13/2026, 10:42:19 PM)
+✔ launch on windows startup option or by default @high @done (6/14/2026, 1:23:41 AM)
+✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
+✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
+☐ prepare instruction for scanner configuration @critical 
+✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
+☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
+☐ Log Viewer Search Filters and small rework (it has to be functional and more user friendly) @low
+☐ graphical style revamp to fit thmx palette @low migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ??? @cancelled (6/13/2026, 2:21:16 AM)
+☐ alerts about samples that sit inside system for too long @high 
+☐ Whole History Viewer (because rn you can only see actual month history) @critical @today
+☐ deep search allowing to search for history of everything in the lab
+☐ mapped storage??? like visualization of storage and where things are etc. @low
+✔ SERVER AND CLIENT SEPARATION @today @done (9/3/2026, 3:54:06 PM)
+SERVER:
+    ✔ Server configuration after first launch (path etc.) [and some protection if path is not present then point to config again] @done (9/3/2026, 3:54:46 PM)
+    ✘ make whole database of users around lab and stick with new user init to server only @cancelled (9/4/2026, 2:09:16 PM)
+CLIENT:
+    ✔ doesnt create folders @done (9/3/2026, 3:56:11 PM)
+    ✔ only read write existing log files [and some protection if path is not present then point to config again] @done (9/3/2026, 3:56:15 PM)
+    ✘ pop-up account synchronization (session sharing flask username = request.environ.get('REMOTE_USER') if username then login else access denied) @cancelled (9/3/2026, 11:22:53 AM)
+    ✔ one and more login sessions handling @done (9/4/2026, 12:36:12 PM)
+    ✔ automatic reloging to AD user after 5 min of inactivity after reloging user @done (9/4/2026, 1:09:53 PM)
+    ☐ no connection with server handling with reconnect and all
+☐ overlay for server CLEANUP @low 
+☐ add keybind actions @high 

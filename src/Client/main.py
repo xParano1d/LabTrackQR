@@ -108,7 +108,7 @@ def setup_tray(root, scanner_mgr):
         pystray.MenuItem("Add New Sample", trigger_new_sample_form),
         pystray.MenuItem("Remove Sample", trigger_removal_mode), 
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("View Logs & History", trigger_log_viewer), 
+        pystray.MenuItem("View Logs History", trigger_log_viewer), 
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Manage Employee Badges", trigger_user_manager),
         pystray.Menu.SEPARATOR,

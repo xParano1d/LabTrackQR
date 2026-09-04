@@ -15,6 +15,8 @@ class ScannerManager:
         self.is_monitoring = True
         self.removal_mode = False
         self.ad_fallback_name = None
+        self.revert_timer = None
+        self.auto_revert = False
 
     def start_monitoring(self):
         threading.Thread(target=self._monitor_loop, daemon=True).start()
@@ -66,14 +68,32 @@ class ScannerNode:
         self.revert_timer = None
 
     def _start_ad_revert_timer(self):
-        if self.revert_timer: self.revert_timer.cancel()
-        # 600 seconds = 10 minutes
-        self.revert_timer = threading.Timer(600.0, self._revert_to_ad)
-        self.revert_timer.start()
+        # 1. BRUTALLY KILL ANY EXISTING TIMER
+        if self.revert_timer: 
+            self.revert_timer.cancel()
+            self.revert_timer = None
+        
+        # 2. ONLY START A NEW ONE IF THE FLAG IS TRULY ACTIVE
+        if getattr(self, 'auto_revert', False):
+            self.revert_timer = threading.Timer(300.0, self._revert_to_ad) # 300s = 5 minutes
+            self.revert_timer.start()
 
     def _revert_to_ad(self):
         if self.ad_fallback_name and self.user != self.ad_fallback_name:
             self.user = self.ad_fallback_name
+            self.auto_revert = False # Turn off the temporary flag
+            
+            if self.revert_timer:
+                self.revert_timer.cancel()
+                self.revert_timer = None
+                
+            # WIPE THE TEMPORARY USER'S UNSAVED JUNK
+            if self.pending_samples:
+                self.pending_samples.clear()
+            self.current_location = None
+            self._clear_timer() # Kill the 10-second idle timer
+            
+            winsound.MessageBeep(winsound.MB_OK)
             self.message_queue.put(f"Session Reverted:\nWelcome back {self.user}")
 
     def _reset_state(self):
@@ -120,6 +140,8 @@ class ScannerNode:
                                 if self.user:
                                     self.message_queue.put(f"Logged Out:\nGoodbye {self.user}.")
                                     self.user = None
+                                    self.auto_revert = False  # <-- CLEAR FLAG
+                                    if self.revert_timer: self.revert_timer.cancel()
                                     self._reset_state()
                                 continue
                                 
@@ -129,13 +151,18 @@ class ScannerNode:
                                 emp_name = self.storage.get_employee_name(badge_id)
                                 
                                 if emp_name:
-                                    if self.user and self.user != emp_name:
-                                        winsound.MessageBeep(winsound.MB_ICONHAND)
-                                        self.message_queue.put(f"Access Denied:\nIn use by {self.user}.")
-                                        continue
-
-                                    self.user = emp_name
-                                    self.message_queue.put(f"Login Successful:\nWelcome {self.user}!")
+                                    if self.user == emp_name:
+                                        # User scanned their own badge while already logged in
+                                        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                                        self.message_queue.put(f"Session Active:\nYou are already logged in as {emp_name}.")
+                                    elif self.user and self.user != emp_name:
+                                        # User scanned a different badge while someone is logged in
+                                        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                                        self.message_queue.put(f"COMMAND:CONFIRM_RELOG:{emp_name}")
+                                    else:
+                                        # Standard clean login
+                                        self.user = emp_name
+                                        self.message_queue.put(f"Login Successful:\nWelcome {self.user}!")
                                 else:
                                     winsound.MessageBeep(winsound.MB_ICONASTERISK)
                                     self.message_queue.put(f"COMMAND:UNKNOWN_BADGE:{badge_id}")

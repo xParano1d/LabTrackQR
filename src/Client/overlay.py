@@ -5,7 +5,7 @@ from tkinter import ttk
 import sys
 import os
 import ctypes
-
+from datetime import datetime
 import qrcode
 from PIL import Image, ImageTk
 
@@ -149,6 +149,11 @@ class NotificationManager:
                 self.open_register_badge(badge_id=None, ad_username=ad_username)
                 continue
 
+            if isinstance(msg, str) and msg.startswith("COMMAND:CONFIRM_RELOG:"):
+                new_user = msg.replace("COMMAND:CONFIRM_RELOG:", "")
+                self.open_relog_confirmation(new_user)
+                continue
+
             if isinstance(msg, str):
                 clean_msg = msg.strip()
                 if clean_msg:
@@ -157,40 +162,83 @@ class NotificationManager:
 
         self.root.after(50, self.check_queue)
 
-    def open_lock_screen(self):
-        if hasattr(self, 'lock_screen_win') and self.lock_screen_win and self.lock_screen_win.winfo_exists():
-            self.lock_screen_win.lift()
+    def open_relog_confirmation(self, new_user):
+        if hasattr(self, 'relog_win') and self.relog_win and self.relog_win.winfo_exists():
+            self.relog_win.lift()
             return
-
+            
         win = tk.Toplevel(self.root)
-        self.lock_screen_win = win
-        win.title("Scanner Locked")
-        win.geometry("450x180")
+        self.relog_win = win
+        win.title("Switch User")
+        # Made taller to fit the checkbox comfortably
+        win.geometry("400x220") 
         
         win.overrideredirect(True)
-        win.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#011528")
+        win.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#f39c12")
         win.attributes("-topmost", True)
 
         win.update_idletasks()
-        x = (win.winfo_screenwidth() // 2) - (450 // 2)
-        y = (win.winfo_screenheight() // 2) - (180 // 2)
+        x = (win.winfo_screenwidth() // 2) - (400 // 2)
+        y = (win.winfo_screenheight() // 2) - (220 // 2)
         win.geometry(f'+{x}+{y}')
 
-        tk.Label(win, text="Scanner Locked", bg="#ffffff", fg="#011528", font=("Segoe UI", 16, "bold")).pack(pady=(20, 10))
-        tk.Label(win, text="Please scan your physical ID badge to log in.", bg="#ffffff", fg="#333333", font=("Segoe UI", 12)).pack(pady=5)
+        tk.Label(win, text="Switch User?", bg="#ffffff", fg="#f39c12", font=("Segoe UI", 16, "bold")).pack(pady=(15, 2))
+        tk.Label(win, text=f"Do you want to log out the current user\nand log in as {new_user}?", bg="#ffffff", fg="#333333", font=("Segoe UI", 11)).pack(pady=2)
+
+        # --- THE NEW CHECKBOX ---
+        revert_var = tk.BooleanVar(value=True) # Defaults to checked
+        chk = tk.Checkbutton(win, text="Revert to original user after 5 min of inactivity", variable=revert_var, bg="#ffffff", fg="#555555", font=("Segoe UI", 9, "italic"), activebackground="#ffffff", selectcolor="#ffffff")
+        chk.pack(pady=5)
+
+        timeout_id = win.after(15000, lambda: cancel())
+
+        def confirm():
+            win.after_cancel(timeout_id)
+            is_temporary = revert_var.get()
+            
+            if self.scanner_mgr:
+                for node in self.scanner_mgr.active_scanners.values():
+                    node.user = new_user
+                    node.pending_samples.clear()
+                    node.current_location = None
+                    
+                    # IDIOT-PROOFING 1: Kill any running timer immediately
+                    if node.revert_timer:
+                        node.revert_timer.cancel()
+                        node.revert_timer = None
+                    
+                    # IDIOT-PROOFING 2: If the AD User logs back in manually, they cannot be temporary.
+                    if new_user == node.ad_fallback_name:
+                        node.auto_revert = False
+                    else:
+                        node.auto_revert = is_temporary
+                        
+                    # IDIOT-PROOFING 3: Start the timer (which checks the flag internally)
+                    node._start_ad_revert_timer()
+            
+            # Check the final state to show the correct notification
+            is_temp_now = False
+            if self.scanner_mgr:
+                for node in self.scanner_mgr.active_scanners.values():
+                    if getattr(node, 'auto_revert', False): is_temp_now = True
+
+            if is_temp_now:
+                self.spawn_notification(f"Temp Login Active:\nWelcome {new_user}!\n(5m idle timer running)")
+            else:
+                self.spawn_notification(f"Login Successful:\nWelcome {new_user}!")
+            win.destroy()
+
+        def cancel():
+            if win.winfo_exists():
+                win.after_cancel(timeout_id)
+                win.destroy()
+            self.spawn_notification("User switch cancelled.")
 
         btn_frame = tk.Frame(win, bg="#ffffff")
-        btn_frame.pack(pady=15)
-
-        def on_close():
-            win.destroy()
-
-        def on_open_directory():
-            win.destroy()
-            self.open_employee_directory()
-
-        tk.Button(btn_frame, text="I have a badge (Close)", command=on_close, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=10)
-        tk.Button(btn_frame, text="Generate Login QR", command=on_open_directory, bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=18).pack(side=tk.LEFT, padx=10)
+        btn_frame.pack(pady=5)
+        
+        tk.Button(btn_frame, text="Yes, Switch", command=confirm, bg="#f39c12", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=15).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
 
     def open_register_badge(self, badge_id=None, ad_username=""):
         reg_win = tk.Toplevel(self.root)
@@ -577,7 +625,9 @@ class NotificationManager:
         search_frame = tk.Frame(top_frame, bg="#f4f4f4")
         search_frame.pack(side=tk.RIGHT)
 
+       # --- UI: ALWAYS-ON SMART SEARCH ---
         search_var = tk.StringVar()
+
         tk.Label(search_frame, text="Search:", bg="#f4f4f4", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=5)
         
         entry_border = tk.Frame(search_frame, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc")
@@ -585,6 +635,7 @@ class NotificationManager:
         search_entry = tk.Entry(entry_border, textvariable=search_var, font=("Segoe UI", 10), width=25, relief="flat", bd=0)
         search_entry.pack(side=tk.LEFT, ipady=4, padx=8)
 
+        # --- TREEVIEW SETUP ---
         columns = ("Date/Day", "Time", "Location", "Sample ID", "Name", "Notes", "User")
         tree = ttk.Treeview(viewer, columns=columns, show="headings", height=15)
         
@@ -605,32 +656,103 @@ class NotificationManager:
 
         tk.Label(viewer, text="Tip: Select a row and press Ctrl+C to copy data", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
 
+        def open_external_file():
+            file_to_open = self.storage.get_active_file_path(current_tab[0])
+            try:
+                os.startfile(file_to_open)
+            except Exception as e:
+                self.spawn_notification(f"Could not open file:\n{e}")
+
         current_tab = ['inventory'] 
+        current_history_target = [None, None] 
         last_data_hash = [""] 
 
-        def open_external_file():
-                    # Dynamically grabs NAS file if online, or Local file if offline
-                    file_to_open = self.storage.get_active_file_path(current_tab[0])
-                    try:
-                        os.startfile(file_to_open)
-                    except Exception as e:
-                        self.spawn_notification(f"Could not open file:\n{e}")
+        # --- THE DEEP SEARCH ENGINE ---
+        search_thread_id = [0] 
 
-        def load_data(source_type, search_query="", is_auto_refresh=False):
+        def run_deep_search(query):
+            search_thread_id[0] += 1
+            current_id = search_thread_id[0]
+
+            # --- NEW: VISUAL FEEDBACK ---
+            tree.delete(*tree.get_children())
+            tree.insert("", tk.END, values=("", "", "⏳ DEEP SEARCH ACTIVE", f"Scanning...", "Reading archives, please wait...", "", ""))
+            viewer.update_idletasks() # Force UI to draw this immediately
+            # ----------------------------
+                
+            def worker():
+                results = []
+                query_lower = query.lower()
+                seen = set()
+                
+                def add_row(r):
+                    r_str = str(r)
+                    if r_str not in seen:
+                        seen.add(r_str)
+                        results.append(r)
+                        
+                if current_id != search_thread_id[0]: return 
+                for row in self.storage.get_inventory_data():
+                    if any(query_lower in str(c).lower() for c in row):
+                        add_row(row)
+                        
+                months = self.storage.get_available_history_months()
+                for ym in months:
+                    if current_id != search_thread_id[0]: return 
+                    y, m = ym.split('-')
+                    
+                    for row in self.storage.get_specific_history(y, m):
+                        if current_id != search_thread_id[0]: return 
+                        if any(query_lower in str(c).lower() for c in row):
+                            add_row(row)
+                            
+                if current_id == search_thread_id[0]:
+                    viewer.after(0, lambda: render_deep_search(results))
+                    
+            import threading
+            threading.Thread(target=worker, daemon=True).start()
+            
+        def render_deep_search(data):
+            current_tab[0] = 'deep_search'
+            tree.delete(*tree.get_children())
+            for row in reversed(data):
+                display_row = list(row) 
+                display_row[2] = self._clean_and_iconify_location(str(display_row[2]))
+                item_id = str(display_row[3]) if len(display_row) > 3 else ""
+                tree.insert("", tk.END, text=item_id, values=display_row)
+        # ------------------------------
+
+        def load_data(source_type, search_query="", is_auto_refresh=False, year=None, month=None):
             if source_type == 'inventory':
                 data = self.storage.get_inventory_data()
+            elif source_type == 'history_specific':
+                data = self.storage.get_specific_history(year, month)
             else:
-                data = self.storage.get_all_time_history() # Seamlessly loads all history
+                data = self.storage.get_all_time_history() 
             
-            current_hash = str(len(data)) + source_type + (str(data[-1]) if data else "")
+            unique_data = []
+            seen_rows = set()
+            for row in data:
+                row_str = str(row) 
+                if row_str not in seen_rows:
+                    seen_rows.add(row_str)
+                    unique_data.append(row)
+            data = unique_data
+
+            current_hash = f"{len(data)}_{source_type}_{year}_{month}_{(str(data[-1]) if data else '')}"
             if is_auto_refresh and current_hash == last_data_hash[0]:
                 return 
             last_data_hash[0] = current_hash
 
             current_tab[0] = source_type
+            if year and month:
+                current_history_target[0] = year
+                current_history_target[1] = month
             
-            selected = tree.selection()
-            selected_ids = [tree.item(item, "text") for item in selected]
+            selected_ids = []
+            if is_auto_refresh:
+                selected = tree.selection()
+                selected_ids = [tree.item(item, "text") for item in selected]
 
             tree.delete(*tree.get_children())
             
@@ -638,44 +760,113 @@ class NotificationManager:
             for row in reversed(data):
                 if query and not any(query in str(cell).lower() for cell in row):
                     continue
-                row[2] = self._clean_and_iconify_location(str(row[2]))
                 
-                item_id = str(row[3]) if len(row) > 3 else ""
-                try:
-                    inserted = tree.insert("", tk.END, text=item_id, values=row)
-                    if item_id in selected_ids:
+                display_row = list(row)
+                display_row[2] = self._clean_and_iconify_location(str(display_row[2]))
+                item_id = str(display_row[3]) if len(display_row) > 3 else ""
+                
+                inserted = tree.insert("", tk.END, text=item_id, values=display_row)
+                if item_id and item_id in selected_ids:
+                    try:
                         tree.selection_add(inserted)
-                except:
-                    tree.insert("", tk.END, values=row)
+                    except Exception:
+                        pass
 
         search_timer = [None]
         def on_search_change(e):
             if search_timer[0] is not None:
                 viewer.after_cancel(search_timer[0])
-            search_timer[0] = viewer.after(400, lambda: load_data(current_tab[0], search_var.get()))
+            
+            query = search_var.get().strip()
+            
+            # --- THE SMART ROUTER ---
+            if len(query) >= 2:
+                # If they type 2+ characters, rip through everything automatically
+                search_timer[0] = viewer.after(400, lambda: run_deep_search(query))
+            else:
+                # If they clear the box, revert exactly to whatever tab they were looking at
+                # We pass an empty string so it doesn't try to filter by a single letter
+                if current_tab[0] == 'deep_search': current_tab[0] = 'inventory' # Fallback if clearing search
+                search_timer[0] = viewer.after(400, lambda: load_data(current_tab[0], "", year=current_history_target[0], month=current_history_target[1]))
 
         search_entry.bind("<KeyRelease>", on_search_change)
 
         def auto_refresh():
             if viewer.winfo_exists():
-                load_data(current_tab[0], search_var.get(), is_auto_refresh=True)
+                # Pause auto-refresh entirely if they have text in the search bar
+                if len(search_var.get().strip()) < 2:
+                    load_data(current_tab[0], "", is_auto_refresh=True, year=current_history_target[0], month=current_history_target[1])
                 viewer.after(2000, auto_refresh) 
 
         viewer.after(2000, auto_refresh)
 
-        def copy_selection(event):
+        def copy_selection(event=None):
             selected = tree.selection()
-            if selected:
-                values = tree.item(selected[0], 'values')
-                clipboard_text = "\t".join(str(v) for v in values)
-                viewer.clipboard_clear()
-                viewer.clipboard_append(clipboard_text)
-                self.spawn_notification("Row copied to clipboard!")
+            if not selected: 
+                return
+            
+            copied_lines = []
+            for item in selected:
+                # Get the values for each selected row
+                values = tree.item(item, "values")
+                # Join them with a Tab (\t) character for clean Excel pasting
+                copied_lines.append("\t".join(str(v) for v in values))
+            
+            viewer.clipboard_clear()
+            viewer.clipboard_append("\n".join(copied_lines))
+            
+            # Optional: Give the user feedback that multiple rows copied
+            copiedItemsCount=len(selected);
+            if(copiedItemsCount>1):
+                self.spawn_notification(f"Copied {copiedItemsCount} rows to clipboard")
+            else:
+                self.spawn_notification(f"Copied 1 row to clipboard")
         tree.bind("<Control-c>", copy_selection)
 
-        # YOUR BEAUTIFUL BUTTONS ARE BACK
+
+        now = datetime.now()
+        curr_year = now.strftime("%Y")
+        curr_month = now.strftime("%m")
         tk.Button(btn_frame, text="View Active Inventory", command=lambda: load_data('inventory', search_var.get()), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="View History Archive", command=lambda: load_data('history', search_var.get()), bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=25).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Current Month Logs", command=lambda y=curr_year, m=curr_month: load_data('history_specific', search_var.get(), year=y, month=m), bg="#445566", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
+
+
+        # --- DYNAMIC CASCADE MENU FOR HISTORY ---
+        month_names = {"01": "January", "02": "February", "03": "March", "04": "April", "05": "May", "06": "June", 
+                       "07": "July", "08": "August", "09": "September", "10": "October", "11": "November", "12": "December"}
+        
+        available_history = self.storage.get_available_history_months() if self.storage else []
+        
+        # Organize flat list into a dictionary: {'2026': ['09', '08'], '2027': ['01']}
+        history_tree = {}
+        for ym in available_history:
+            y, m = ym.split('-')
+            if y not in history_tree: history_tree[y] = []
+            history_tree[y].append(m)
+
+        history_btn = tk.Menubutton(btn_frame, text="Archive \u25BC", bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=15, activebackground="#777777", activeforeground="white", cursor="hand2")
+        history_btn.pack(side=tk.LEFT, padx=5)
+
+        main_menu = tk.Menu(history_btn, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
+        history_btn.config(menu=main_menu)
+
+        if not history_tree:
+            main_menu.add_command(label="No Archives Found", state="disabled")
+        else:
+            # Sort years descending (newest first)
+            for year in sorted(history_tree.keys(), reverse=True):
+                year_menu = tk.Menu(main_menu, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
+                main_menu.add_cascade(label=f"Year: {year}", menu=year_menu)
+                
+                # Sort months descending
+                for month in sorted(history_tree[year], reverse=True):
+                    pretty_month = f"{month_names.get(month, month)} ({month})"
+                    # Use a lambda default argument (y=year, m=month) to capture the exact iteration values
+                    year_menu.add_command(
+                        label=pretty_month, 
+                        command=lambda y=year, m=month: load_data('history_specific', search_var.get(), year=y, month=m)
+                    )
+
         tk.Button(btn_frame, text="Open in External Editor", command=open_external_file, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=5)
 
         load_data('inventory')
