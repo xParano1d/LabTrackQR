@@ -42,7 +42,9 @@ class NotificationManager:
             
         self.root.withdraw() 
         self.show_splash_screen() # Call the splash screen
-        self.check_queue()
+        
+        # Delay the queue processor for 4.5 seconds so it starts exactly after the splash screen dies
+        self.root.after(4500, self.check_queue)
 
     def _apply_dark_title_bar(self, window):
         """Forces the Windows title bar into Dark Mode and applies custom brand colors."""
@@ -92,16 +94,16 @@ class NotificationManager:
             # 3. Save as 'self.splash_logo' so Tkinter doesn't delete it from memory!
             self.splash_logo = ImageTk.PhotoImage(resized_img)
             # 4. Display it at the top
-            tk.Label(splash, image=self.splash_logo, bg="#011528").pack(pady=(25, 0))
+            tk.Label(splash, image=self.splash_logo, bg="#011528").pack(pady=(35, 0))
         except Exception as e:
             print(f"Could not load logo: {e}")
 
         # The rest of your text, slightly adjusted padding
-        tk.Label(splash, text="LabTrackQR", bg="#011528", fg="white", font=("Segoe UI", 26, "bold")).pack(pady=(5, 5))
-        tk.Label(splash, text="Connecting to hardware & network...", bg="#011528", fg="#9db2c6", font=("Segoe UI", 11, "italic")).pack()
+        tk.Label(splash, text="LabTrackQR", bg="#011528", fg="white", font=("Montserrat", 26, "bold")).pack(pady=(5,0))
+        tk.Label(splash, text="SERVER", bg="#011528", fg="#9db2c6", font=("Montserrat", 16, "italic bold")).pack(pady=(0,2))
         
         # Destroys itself after 2500 milliseconds (2.5 seconds)
-        splash.after(3000, splash.destroy)
+        splash.after(2500, splash.destroy)
 
     def check_queue(self):
         while not self.message_queue.empty():
@@ -173,8 +175,8 @@ class NotificationManager:
         y = (win.winfo_screenheight() // 2) - (180 // 2)
         win.geometry(f'+{x}+{y}')
 
-        tk.Label(win, text="Scanner Locked", bg="#ffffff", fg="#011528", font=("Segoe UI", 16, "bold")).pack(pady=(20, 10))
-        tk.Label(win, text="Please scan your physical ID badge to log in.", bg="#ffffff", fg="#333333", font=("Segoe UI", 12)).pack(pady=5)
+        tk.Label(win, text="Scanner Locked", bg="#ffffff", fg="#011528", font=("Montserrat", 16, "bold")).pack(pady=(20, 10))
+        tk.Label(win, text="Please scan your physical ID badge to log in.", bg="#ffffff", fg="#333333", font=("Montserrat", 12)).pack(pady=5)
 
         btn_frame = tk.Frame(win, bg="#ffffff")
         btn_frame.pack(pady=15)
@@ -186,8 +188,8 @@ class NotificationManager:
             win.destroy()
             self.open_employee_directory()
 
-        tk.Button(btn_frame, text="I have a badge (Close)", command=on_close, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=10)
-        tk.Button(btn_frame, text="Generate Login QR", command=on_open_directory, bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=18).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="I have a badge (Close)", command=on_close, bg="#aaaaaa", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="Generate Login QR", command=on_open_directory, bg="#011528", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=18).pack(side=tk.LEFT, padx=10)
 
     def open_register_badge(self, badge_id=None, ad_username=""):
         reg_win = tk.Toplevel(self.root)
@@ -204,24 +206,24 @@ class NotificationManager:
         reg_win.geometry(f'+{x}+{y}')
         
         title_text = "Windows AD Setup" if ad_username else "New ID Card Detected"
-        tk.Label(reg_win, text=title_text, bg="#ffffff", fg="#217346", font=("Segoe UI", 16, "bold")).pack(pady=(20, 5))
+        tk.Label(reg_win, text=title_text, bg="#ffffff", fg="#217346", font=("Montserrat", 16, "bold")).pack(pady=(20, 5))
         
         if ad_username:
-            tk.Label(reg_win, text=f"Linking to Windows account: {ad_username}", bg="#ffffff", fg="#555555", font=("Segoe UI", 10, "italic")).pack(pady=(0, 10))
+            tk.Label(reg_win, text=f"Linking to Windows account: {ad_username}", bg="#ffffff", fg="#555555", font=("Montserrat", 10, "italic")).pack(pady=(0, 10))
             
-        tk.Label(reg_win, text="8-Digit Badge ID:", bg="#ffffff", font=("Segoe UI", 10, "bold")).pack(pady=(5, 2))
-        entry_badge = tk.Entry(reg_win, font=("Segoe UI", 12), justify="center", width=25, relief="solid", bd=1)
+        tk.Label(reg_win, text="8-Digit Badge ID:", bg="#ffffff", font=("Montserrat", 10, "bold")).pack(pady=(5, 2))
+        entry_badge = tk.Entry(reg_win, font=("Montserrat", 12), justify="center", width=25, relief="solid", bd=1)
         entry_badge.pack(ipady=3)
         if badge_id:
             entry_badge.insert(0, badge_id)
             entry_badge.config(state="disabled")
             
-        tk.Label(reg_win, text="First Name:", bg="#ffffff", font=("Segoe UI", 10, "bold")).pack(pady=(15, 2))
-        entry_first = tk.Entry(reg_win, font=("Segoe UI", 12), justify="center", width=25, relief="solid", bd=1)
+        tk.Label(reg_win, text="First Name:", bg="#ffffff", font=("Montserrat", 10, "bold")).pack(pady=(15, 2))
+        entry_first = tk.Entry(reg_win, font=("Montserrat", 12), justify="center", width=25, relief="solid", bd=1)
         entry_first.pack(ipady=3)
         
-        tk.Label(reg_win, text="Last Name:", bg="#ffffff", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
-        entry_last = tk.Entry(reg_win, font=("Segoe UI", 12), justify="center", width=25, relief="solid", bd=1)
+        tk.Label(reg_win, text="Last Name:", bg="#ffffff", font=("Montserrat", 10, "bold")).pack(pady=(10, 2))
+        entry_last = tk.Entry(reg_win, font=("Montserrat", 12), justify="center", width=25, relief="solid", bd=1)
         entry_last.pack(ipady=3)
         
         def save_badge():
@@ -253,73 +255,77 @@ class NotificationManager:
             
         btn_frame = tk.Frame(reg_win, bg="#ffffff")
         btn_frame.pack(pady=20)
-        tk.Button(btn_frame, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
-        tk.Button(btn_frame, text="Assign & Save", command=save_badge, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=15).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="Assign & Save", command=save_badge, bg="#217346", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=15).pack(side=tk.LEFT, padx=10)
 
     def open_employee_directory(self):
-        manager = tk.Toplevel(self.root)
-        manager.title("Manage Employee Badges")
-        manager.geometry("500x530")
-        
-        manager.overrideredirect(True)
-        manager.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#011528")
-        manager.attributes("-topmost", True)
-
-        manager.update_idletasks()
-        x = (manager.winfo_screenwidth() // 2) - (500 // 2)
-        y = (manager.winfo_screenheight() // 2) - (530 // 2)
-        manager.geometry(f'+{x}+{y}')
-
-        close_btn = tk.Button(manager, text="✕", command=manager.destroy, bg="#ffffff", fg="#999999", font=("Segoe UI", 12, "bold"), relief="flat", activebackground="#ffcccc", cursor="hand2")
-        close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
-
-        tk.Label(manager, text="Manage Employee Badges", bg="#ffffff", fg="#011528", font=("Segoe UI", 18, "bold")).pack(pady=(20, 10))
-        
-        sel_frame = tk.Frame(manager, bg="#ffffff")
-        sel_frame.pack(fill=tk.X, padx=30, pady=10)
-        
-        tk.Label(sel_frame, text="Select Employee:", bg="#ffffff", fg="#333333", font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        
-        emp_dict = self.storage.get_employees() if self.storage else {}
-        display_list = [f"{name} ({b_id})" for b_id, name in emp_dict.items()]
-        display_list.sort()
+            manager = tk.Toplevel(self.root)
+            manager.title("Manage Employee Badges")
+            manager.geometry("500x530")
             
-        selected_user = tk.StringVar()
-        combo = ttk.Combobox(sel_frame, textvariable=selected_user, values=display_list, state="readonly", font=("Segoe UI", 12), width=40)
-        combo.pack(pady=5, ipady=3)
-        if display_list:
-            combo.current(0)
+            manager.overrideredirect(True)
+            manager.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#011528")
+            manager.attributes("-topmost", True)
+    
+            manager.update_idletasks()
+            x = (manager.winfo_screenwidth() // 2) - (500 // 2)
+            y = (manager.winfo_screenheight() // 2) - (530 // 2)
+            manager.geometry(f'+{x}+{y}')
+    
+            close_btn = tk.Button(manager, text="✕", command=manager.destroy, bg="#ffffff", fg="#999999", font=("Segoe UI", 12, "bold"), relief="flat", activebackground="#ffcccc", cursor="hand2")
+            close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
+    
+            tk.Label(manager, text="Manage Employee Badges", bg="#ffffff", fg="#011528", font=("Segoe UI", 18, "bold")).pack(pady=(20, 10))
             
-        qr_frame = tk.Frame(manager, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc", width=250, height=250)
-        qr_frame.pack(pady=10)
-        qr_frame.pack_propagate(False)
-        
-        qr_label = tk.Label(qr_frame, bg="#ffffff")
-        qr_label.pack(expand=True)
-        
-        qr_text = tk.Label(manager, text="Select an employee and click Generate", bg="#ffffff", font=("Segoe UI", 10, "italic"), fg="#555")
-        qr_text.pack(pady=5)
-        
-        def generate_qr():
-            selection = selected_user.get()
-            if not selection: return
+            sel_frame = tk.Frame(manager, bg="#ffffff")
+            sel_frame.pack(fill=tk.X, padx=30, pady=10)
             
-            badge_id = selection.split("(")[-1].replace(")", "").strip()
+            tk.Label(sel_frame, text="Select Employee:", bg="#ffffff", fg="#333333", font=("Segoe UI", 11, "bold")).pack(anchor="w")
             
-            qr = qrcode.QRCode(box_size=8, border=2)
-            qr.add_data(f"ID: {badge_id}")
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
+            emp_dict = self.storage.get_employees() if self.storage else {}
+            display_list = []
+            for b_id, data in emp_dict.items():
+                # Handle the new dictionary format, but fallback to string for backwards compatibility
+                name_str = data.get("full_name", "Unknown") if isinstance(data, dict) else data
+                display_list.append(f"{name_str} ({b_id})")
+            display_list.sort()
+                
+            selected_user = tk.StringVar()
+            combo = ttk.Combobox(sel_frame, textvariable=selected_user, values=display_list, state="readonly", font=("Segoe UI", 12), width=40)
+            combo.pack(pady=5, ipady=3)
+            if display_list:
+                combo.current(0)
+                
+            qr_frame = tk.Frame(manager, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc", width=250, height=250)
+            qr_frame.pack(pady=10)
+            qr_frame.pack_propagate(False)
             
-            img = img.resize((230, 230), Image.Resampling.LANCZOS)
-            tk_img = ImageTk.PhotoImage(img)
+            qr_label = tk.Label(qr_frame, bg="#ffffff")
+            qr_label.pack(expand=True)
             
-            qr_label.config(image=tk_img)
-            qr_label.image = tk_img 
+            qr_text = tk.Label(manager, text="Select an employee and click Generate", bg="#ffffff", font=("Segoe UI", 10, "italic"), fg="#555")
+            qr_text.pack(pady=5)
             
-            qr_text.config(text=f"Scan to login as: {selection.split('(')[0].strip()}", font=("Segoe UI", 12, "bold"), fg="#217346")
-
-        tk.Button(sel_frame, text="Generate Login QR", command=generate_qr, bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(pady=10)
+            def generate_qr():
+                selection = selected_user.get()
+                if not selection: return
+                
+                badge_id = selection.split("(")[-1].replace(")", "").strip()
+                
+                qr = qrcode.QRCode(box_size=8, border=2)
+                qr.add_data(f"ID: {badge_id}")
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                
+                img = img.resize((230, 230), Image.Resampling.LANCZOS)
+                tk_img = ImageTk.PhotoImage(img)
+                
+                qr_label.config(image=tk_img)
+                qr_label.image = tk_img 
+                
+                qr_text.config(text=f"Scan to login as: {selection.split('(')[0].strip()}", font=("Segoe UI", 12, "bold"), fg="#217346")
+    
+            tk.Button(sel_frame, text="Generate Login QR", command=generate_qr, bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(pady=10)
 
     def open_waiting_for_removal(self):
         active_users = []
@@ -353,8 +359,8 @@ class NotificationManager:
         y = (win.winfo_screenheight() // 2) - (160 // 2)
         win.geometry(f'+{x}+{y}')
 
-        tk.Label(win, text="Scanner is in Removal Mode", bg="#ffffff", fg="#d9534f", font=("Segoe UI", 13, "bold")).pack(pady=(20, 5))
-        tk.Label(win, text="Scan a sample's QR code to delete it.", bg="#ffffff", fg="#333333", font=("Segoe UI", 10)).pack(pady=5)
+        tk.Label(win, text="Scanner is in Removal Mode", bg="#ffffff", fg="#d9534f", font=("Montserrat", 13, "bold")).pack(pady=(20, 5))
+        tk.Label(win, text="Scan a sample's QR code to delete it.", bg="#ffffff", fg="#333333", font=("Montserrat", 10)).pack(pady=5)
 
         def cancel():
             if self.scanner_mgr:
@@ -362,7 +368,7 @@ class NotificationManager:
             win.destroy()
             self.spawn_notification("Removal mode cancelled.")
 
-        tk.Button(win, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=15).pack(pady=10)
+        tk.Button(win, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=15).pack(pady=10)
 
     def open_removal_confirmation(self, sample_id, action_user, sample_name):
         win = tk.Toplevel(self.root)
@@ -379,16 +385,16 @@ class NotificationManager:
         y = (win.winfo_screenheight() // 2) - (260 // 2)
         win.geometry(f'+{x}+{y}')
 
-        tk.Label(win, text="⚠️ Warning", bg="#ffffff", fg="#d9534f", font=("Segoe UI", 16, "bold")).pack(pady=(15, 2))
+        tk.Label(win, text="⚠️ Warning", bg="#ffffff", fg="#d9534f", font=("Montserrat", 16, "bold")).pack(pady=(15, 2))
         
-        tk.Label(win, text="Permanently remove:", bg="#ffffff", fg="#333333", font=("Segoe UI", 11)).pack()
+        tk.Label(win, text="Permanently remove:", bg="#ffffff", fg="#333333", font=("Montserrat", 11)).pack()
         
         # FIX: ADDED WRAPLENGTH SO LONG NAMES DON'T OVERFLOW
-        tk.Label(win, text=f"{sample_name}", bg="#ffffff", fg="#000000", font=("Segoe UI", 12, "bold"), wraplength=380, justify="center").pack(pady=2)
+        tk.Label(win, text=f"{sample_name}", bg="#ffffff", fg="#000000", font=("Montserrat", 12, "bold"), wraplength=380, justify="center").pack(pady=2)
         
-        tk.Label(win, text=f"({sample_id})", bg="#ffffff", fg="#666666", font=("Segoe UI", 10)).pack()
+        tk.Label(win, text=f"({sample_id})", bg="#ffffff", fg="#666666", font=("Montserrat", 10)).pack()
 
-        tk.Label(win, text=f"Requested by: {action_user}", bg="#f9e6e6", fg="#d9534f", font=("Segoe UI", 10, "bold"), width=34, relief="solid", bd=1).pack(pady=10, ipady=3)
+        tk.Label(win, text=f"Requested by: {action_user}", bg="#f9e6e6", fg="#d9534f", font=("Montserrat", 10, "bold"), width=34, relief="solid", bd=1).pack(pady=10, ipady=3)
 
         timeout_id = win.after(20000, lambda: cancel())
 
@@ -407,8 +413,8 @@ class NotificationManager:
         btn_frame = tk.Frame(win, bg="#ffffff")
         btn_frame.pack(pady=5)
         
-        tk.Button(btn_frame, text="Confirm", command=confirm, bg="#d9534f", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
-        tk.Button(btn_frame, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="Confirm", command=confirm, bg="#d9534f", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
+        tk.Button(btn_frame, text="Cancel", command=cancel, bg="#aaaaaa", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
 
     def open_new_sample_form(self):
         active_users = []
@@ -438,7 +444,7 @@ class NotificationManager:
         y = (form.winfo_screenheight() // 2) - (height // 2)
         form.geometry(f'{width}x{height}+{x}+{y}')
 
-        close_btn = tk.Button(form, text="✕", command=form.destroy, bg="#ffffff", fg="#999999", font=("Segoe UI", 12, "bold"), relief="flat", activebackground="#ffcccc", cursor="hand2")
+        close_btn = tk.Button(form, text="✕", command=form.destroy, bg="#ffffff", fg="#999999", font=("Montserrat", 12, "bold"), relief="flat", activebackground="#ffcccc", cursor="hand2")
         close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
 
         def only_numbers(char):
@@ -446,30 +452,30 @@ class NotificationManager:
             
         val_numbers = (form.register(only_numbers), '%P')
 
-        tk.Label(form, text="Sample ID (Numbers only, e.g. 123)", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(15, 2))
-        entry_id = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1, validate="key", validatecommand=val_numbers)
+        tk.Label(form, text="Sample ID (Numbers only, e.g. 123)", bg="#ffffff", fg="#333333", font=("Montserrat", 10, "bold")).pack(pady=(15, 2))
+        entry_id = tk.Entry(form, width=38, justify="center", font=("Montserrat", 11), relief="solid", bd=1, validate="key", validatecommand=val_numbers)
         entry_id.pack(pady=5, ipady=4)
 
-        tk.Label(form, text="Sample Name", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
-        entry_name = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1)
+        tk.Label(form, text="Sample Name", bg="#ffffff", fg="#333333", font=("Montserrat", 10, "bold")).pack(pady=(10, 2))
+        entry_name = tk.Entry(form, width=38, justify="center", font=("Montserrat", 11), relief="solid", bd=1)
         entry_name.pack(pady=5, ipady=4)
         
-        tk.Label(form, text="Description / Notes", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
+        tk.Label(form, text="Description / Notes", bg="#ffffff", fg="#333333", font=("Montserrat", 10, "bold")).pack(pady=(10, 2))
         
         # FIX: ADDED WRAP=TK.WORD TO PREVENT WORDS FROM SPLITTING IN HALF
-        entry_notes = tk.Text(form, width=38, height=3, font=("Segoe UI", 11), relief="solid", bd=1, wrap=tk.WORD)
+        entry_notes = tk.Text(form, width=38, height=3, font=("Montserrat", 11), relief="solid", bd=1, wrap=tk.WORD)
         entry_notes.pack(pady=5)
 
-        tk.Label(form, text="Active Session", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
+        tk.Label(form, text="Active Session", bg="#ffffff", fg="#333333", font=("Montserrat", 10, "bold")).pack(pady=(10, 2))
         
         selected_user = tk.StringVar()
         
         if len(active_users) == 1:
             selected_user.set(active_users[0])
-            tk.Label(form, text=active_users[0], bg="#e8f4ea", fg="#217346", font=("Segoe UI", 11, "bold"), width=34, relief="solid", bd=1).pack(pady=5, ipady=4)
+            tk.Label(form, text=active_users[0], bg="#e8f4ea", fg="#217346", font=("Montserrat", 11, "bold"), width=34, relief="solid", bd=1).pack(pady=5, ipady=4)
         else:
             selected_user.set(active_users[0])
-            combo_user = ttk.Combobox(form, textvariable=selected_user, values=active_users, state="readonly", font=("Segoe UI", 11, "bold"), width=34)
+            combo_user = ttk.Combobox(form, textvariable=selected_user, values=active_users, state="readonly", font=("Montserrat", 11, "bold"), width=34)
             combo_user.pack(pady=5)
 
         def reset_bg(event):
@@ -506,7 +512,7 @@ class NotificationManager:
                 if not name_val: 
                     entry_name.config(bg="#ffcccc")
 
-        tk.Button(form, text="Initialize Item", command=save_manual_entry, bg="#011528", fg="white", font=("Segoe UI", 11, "bold"), relief="flat", width=20, cursor="hand2").pack(pady=(15, 20))
+        tk.Button(form, text="Initialize Item", command=save_manual_entry, bg="#011528", fg="white", font=("Montserrat", 11, "bold"), relief="flat", width=20, cursor="hand2").pack(pady=(15, 20))
 
     def _clean_and_iconify_location(self, loc_str):
         clean_str = loc_str.replace('LOC:', '').replace('LOC-', '').strip()
@@ -534,10 +540,29 @@ class NotificationManager:
         return f"{icon} {clean_str}"
 
     def open_log_viewer(self):
+        # --- ENFORCE 2 WINDOW LIMIT ---
+        if not hasattr(self, 'active_log_windows'):
+            self.active_log_windows = []
+        # Clean out closed windows
+        self.active_log_windows = [w for w in self.active_log_windows if w.winfo_exists()]
+        
+        if len(self.active_log_windows) >= 2:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONHAND)
+            self.spawn_notification("Window Limit Reached:\nMaximum of 2 log windows allowed.")
+            return
+
         viewer = tk.Toplevel(self.root)
+        self.active_log_windows.append(viewer)
         viewer.title("System Logs & Inventory")
         viewer.geometry("1000x550")
         viewer.configure(bg="#f4f4f4")
+        
+        # --- FIX TASKBAR ICON ---
+        try:
+            viewer.iconbitmap(default=resource_path("iconApp.ico"))
+        except:
+            pass
         
         # --- APPLY DARK MODE TO TITLE BAR ---
         self._apply_dark_title_bar(viewer)
@@ -552,11 +577,11 @@ class NotificationManager:
         search_frame.pack(side=tk.RIGHT)
 
         search_var = tk.StringVar()
-        tk.Label(search_frame, text="Search:", bg="#f4f4f4", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=5)
+        tk.Label(search_frame, text="Search:", bg="#f4f4f4", font=("Montserrat", 10, "bold")).pack(side=tk.LEFT, padx=5)
         
         entry_border = tk.Frame(search_frame, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc")
         entry_border.pack(side=tk.LEFT)
-        search_entry = tk.Entry(entry_border, textvariable=search_var, font=("Segoe UI", 10), width=25, relief="flat", bd=0)
+        search_entry = tk.Entry(entry_border, textvariable=search_var, font=("Montserrat", 10), width=25, relief="flat", bd=0)
         search_entry.pack(side=tk.LEFT, ipady=4, padx=8)
 
         columns = ("Date/Day", "Time", "Location", "Sample ID", "Name", "Notes", "User")
@@ -577,14 +602,16 @@ class NotificationManager:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
-        tk.Label(viewer, text="Tip: Select a row and press Ctrl+C to copy data", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
+        tk.Label(viewer, text="Tip: Select a row and press Ctrl+C to copy data", bg="#f4f4f4", fg="#666666", font=("Montserrat", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
 
         current_tab = ['inventory'] 
         last_data_hash = [""] 
 
         def open_external_file():
-            # Dynamically grabs NAS file if online, or Local file if offline
             file_to_open = self.storage.get_active_file_path(current_tab[0])
+            if not file_to_open:
+                self.spawn_notification("Editor Disabled on Client.\nView master files on the Server Dashboard.")
+                return
             try:
                 os.startfile(file_to_open)
             except Exception as e:
@@ -648,9 +675,9 @@ class NotificationManager:
         tree.bind("<Control-c>", copy_selection)
 
         # YOUR BEAUTIFUL BUTTONS ARE BACK
-        tk.Button(btn_frame, text="View Active Inventory", command=lambda: load_data('inventory', search_var.get()), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="View History Archive", command=lambda: load_data('history', search_var.get()), bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=25).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Open in External Editor", command=open_external_file, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="View Active Inventory", command=lambda: load_data('inventory', search_var.get()), bg="#011528", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="View History Archive", command=lambda: load_data('history', search_var.get()), bg="#555555", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=25).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Open in External Editor", command=open_external_file, bg="#217346", fg="white", font=("Montserrat", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=5)
 
         load_data('inventory')
 
@@ -672,15 +699,15 @@ class NotificationManager:
         lines = text.split('\n')
         
         if len(lines) == 3:
-            tk.Label(window, text=lines[0], fg="#9db2c6", bg="#011528", font=("Segoe UI", 9, "bold")).place(relx=0.5, rely=0.20, anchor="center")
-            tk.Label(window, text=lines[1], fg="#ffffff", bg="#011528", font=("Segoe UI", 12, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.50, anchor="center")
-            tk.Label(window, text=lines[2], fg="#cccccc", bg="#011528", font=("Segoe UI", 9)).place(relx=0.5, rely=0.80, anchor="center")
+            tk.Label(window, text=lines[0], fg="#9db2c6", bg="#011528", font=("Montserrat", 9, "bold")).place(relx=0.5, rely=0.20, anchor="center")
+            tk.Label(window, text=lines[1], fg="#ffffff", bg="#011528", font=("Montserrat", 12, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.50, anchor="center")
+            tk.Label(window, text=lines[2], fg="#cccccc", bg="#011528", font=("Montserrat", 9)).place(relx=0.5, rely=0.80, anchor="center")
         elif len(lines) == 2:
-            tk.Label(window, text=lines[0], fg="#9db2c6", bg="#011528", font=("Segoe UI", 9, "bold")).place(relx=0.5, rely=0.30, anchor="center")
+            tk.Label(window, text=lines[0], fg="#9db2c6", bg="#011528", font=("Montserrat", 9, "bold")).place(relx=0.5, rely=0.30, anchor="center")
             # FIX: ADDED WRAPLENGTH TO PREVENT OVERFLOW
-            tk.Label(window, text=lines[1], fg="#ffffff", bg="#011528", font=("Segoe UI", 13, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.65, anchor="center")
+            tk.Label(window, text=lines[1], fg="#ffffff", bg="#011528", font=("Montserrat", 13, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.65, anchor="center")
         else:
-            tk.Label(window, text=text, fg="#ffffff", bg="#011528", font=("Segoe UI", 12, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.5, anchor="center")
+            tk.Label(window, text=text, fg="#ffffff", bg="#011528", font=("Montserrat", 12, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.5, anchor="center")
         
         self.position_and_show(window)
         window.after(6500, lambda: self.destroy_notification(window))

@@ -24,7 +24,7 @@ class CsvStorage:
     def _ensure_files_exist(self):
         if not os.path.exists(self.inventory_file):
             with open(self.inventory_file, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
+                writer = csv.writer(f, delimiter=';')
                 writer.writerow(["Date", "Time", "Location", "Sample ID", "Name", "Notes", "User"])
         if not os.path.exists(self.history_dir):
             os.makedirs(self.history_dir)
@@ -74,9 +74,9 @@ class CsvStorage:
         
         if not os.path.exists(history_file):
             with open(history_file, 'w', newline='', encoding='utf-8') as f:
-                csv.writer(f).writerow(["Date", "Time", "Location", "Sample ID", "Name", "Notes", "User"])
+                csv.writer(f, delimiter=';').writerow(["Date", "Time", "Location", "Sample ID", "Name", "Notes", "User"])
         with open(history_file, 'a', newline='', encoding='utf-8') as f:
-            csv.writer(f).writerow(row)
+            csv.writer(f, delimiter=';').writerow(row)
 
     # --- UPGRADED EMPLOYEE JSON MANAGEMENT ---
     def get_employees(self):
@@ -128,7 +128,7 @@ class CsvStorage:
         with self.lock:
             try:
                 with open(self.inventory_file, 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
+                    reader = csv.reader(f, delimiter=';')
                     next(reader, None) 
                     for row in reader:
                         if len(row) > 3 and row[3] == sample_id: return True
@@ -139,7 +139,7 @@ class CsvStorage:
         with self.lock:
             try:
                 with open(self.inventory_file, 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
+                    reader = csv.reader(f, delimiter=';')
                     next(reader, None)
                     for row in reader:
                         if len(row) >= 5 and row[3] == sample_id: return row[4]
@@ -173,7 +173,7 @@ class CsvStorage:
 
             try:
                 with open(self.inventory_file, 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
+                    reader = csv.reader(f, delimiter=';')
                     header = next(reader, None)
                     if header: rows_to_keep.append(header)
                     for r in reader:
@@ -189,7 +189,7 @@ class CsvStorage:
             if not found_existing: rows_to_keep.append([date_str, time_str, location_id, sample_id, sample_name, desc_notes, user])
 
             with open(self.inventory_file, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
+                writer = csv.writer(f, delimiter=';')
                 writer.writerows(rows_to_keep)
                 
             self._log_to_history(location_id, sample_id, sample_name, desc_notes, user)
@@ -210,7 +210,7 @@ class CsvStorage:
             rows_to_keep = []
             try:
                 with open(self.inventory_file, 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
+                    reader = csv.reader(f, delimiter=';')
                     header = next(reader, None)
                     if header: rows_to_keep.append(header)
                     for row in reader:
@@ -218,7 +218,7 @@ class CsvStorage:
                         else: rows_to_keep.append(row)
                             
                 with open(self.inventory_file, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.writer(f)
+                    writer = csv.writer(f, delimiter=';')
                     writer.writerows(rows_to_keep)
                 self._log_to_history("ACTION: REMOVED", sample_id, sample_name, "Sample permanently removed", user)
             except Exception: pass
@@ -228,7 +228,7 @@ class CsvStorage:
     def get_inventory_data(self):
         with self.lock:
             try:
-                with open(self.inventory_file, 'r', encoding='utf-8') as f: return list(csv.reader(f))[1:] 
+                with open(self.inventory_file, 'r', encoding='utf-8') as f: return list(csv.reader(f, delimiter=';'))[1:] 
             except: return []
 
     def get_available_history_months(self):
@@ -245,7 +245,7 @@ class CsvStorage:
     def get_specific_history(self, year, month):
         with self.lock:
             try:
-                with open(os.path.join(self.history_dir, year, f"log_{month}.csv"), 'r', encoding='utf-8') as f: return list(csv.reader(f))[1:]
+                with open(os.path.join(self.history_dir, year, f"log_{month}.csv"), 'r', encoding='utf-8') as f: return list(csv.reader(f, delimiter=';'))[1:]
             except: return []
                 
     def get_all_time_history(self):

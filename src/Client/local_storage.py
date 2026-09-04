@@ -5,6 +5,8 @@ from datetime import datetime
 import threading
 import requests
 
+from config import BASE_PATH
+
 class ApiStorage:
     def __init__(self, server_url):
         self.server_url = server_url.rstrip('/')
@@ -73,14 +75,6 @@ class ApiStorage:
         except Exception: pass
         return {}
 
-# --- API DATA FETCHING ---
-    def get_employees(self):
-        try:
-            resp = requests.get(f"{self.server_url}/api/get_employees", timeout=2)
-            if resp.status_code == 200: return resp.json().get('employees', {})
-        except Exception: pass
-        return {}
-
     def get_employee_name(self, badge_id):
         emp_data = self.get_employees().get(badge_id)
         if isinstance(emp_data, str): 
@@ -105,9 +99,9 @@ class ApiStorage:
         }
         try:
             resp = requests.post(f"{self.server_url}/api/add_employee", json=payload, timeout=3)
-            print(f"API Response: {resp.status_code}") # <-- ADD THIS
+            print(f"API Response: {resp.status_code}") 
         except Exception as e:
-            print(f"NETWORK ERROR: Could not reach Server at {self.server_url} - {e}") # <-- ADD THIS
+            print(f"NETWORK ERROR: Could not reach Server at {self.server_url} - {e}") 
 
     # --- OFFLINE CACHE VALIDATION ---
     def sample_exists(self, sample_id):
@@ -164,4 +158,11 @@ class ApiStorage:
         return [] # The Client UI no longer needs history access; use the Server for this.
         
     def get_active_file_path(self, file_type):
-        return ""
+        """Builds the direct path to the network drive for the external editor."""
+        if file_type == 'inventory':
+            return os.path.join(BASE_PATH, "inventory.csv")
+        else:
+            now = datetime.now()
+            year_str = now.strftime("%Y")
+            month_str = now.strftime("%m")
+            return os.path.join(BASE_PATH, "history_logs", year_str, f"log_{month_str}.csv")

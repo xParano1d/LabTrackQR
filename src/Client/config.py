@@ -9,3 +9,6 @@ BAUDRATE = 9600
 
 # Server API Address (Change this to your Server's static IP)
 SERVER_URL = "http://10.217.159.9:5000"
+
+#base files path
+BASE_PATH = r"Z:\Sample Tracking Tool" 

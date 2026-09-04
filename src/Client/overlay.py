@@ -42,7 +42,9 @@ class NotificationManager:
             
         self.root.withdraw() 
         self.show_splash_screen() # Call the splash screen
-        self.check_queue()
+        
+        # Delay the queue processor for 4.5 seconds so it starts exactly after the splash screen dies
+        self.root.after(4500, self.check_queue)
 
     def _apply_dark_title_bar(self, window):
         """Forces the Windows title bar into Dark Mode and applies custom brand colors."""
@@ -72,36 +74,37 @@ class NotificationManager:
             pass # Fail silently on older versions of Windows
 
     def show_splash_screen(self):
-        splash = tk.Toplevel(self.root)
-        splash.overrideredirect(True)
-        splash.configure(bg="#011528", highlightthickness=2, highlightbackground="#ffffff")
-        splash.attributes("-topmost", True)
-        
-        # Increased height to 240 to perfectly fit the new logo
-        width, height = 400, 240
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        splash.geometry(f"{width}x{height}+{x}+{y}")
-        
-        # --- THE LOGO INTEGRATION ---
-        try:
-            # 1. Open your universal icon
-            original_img = Image.open(resource_path("icon_white.ico"))
-            # 2. Resize it to a crisp 80x80 for the center of the screen
-            resized_img = original_img.resize((80, 80), Image.Resampling.LANCZOS)
-            # 3. Save as 'self.splash_logo' so Tkinter doesn't delete it from memory!
-            self.splash_logo = ImageTk.PhotoImage(resized_img)
-            # 4. Display it at the top
-            tk.Label(splash, image=self.splash_logo, bg="#011528").pack(pady=(25, 0))
-        except Exception as e:
-            print(f"Could not load logo: {e}")
-
-        # The rest of your text, slightly adjusted padding
-        tk.Label(splash, text="LabTrackQR", bg="#011528", fg="white", font=("Segoe UI", 26, "bold")).pack(pady=(5, 5))
-        tk.Label(splash, text="Connecting to hardware & network...", bg="#011528", fg="#9db2c6", font=("Segoe UI", 11, "italic")).pack()
-        
-        # Destroys itself after 2500 milliseconds (2.5 seconds)
-        splash.after(3000, splash.destroy)
+            splash = tk.Toplevel(self.root)
+            splash.overrideredirect(True)
+            splash.configure(bg="#011528", highlightthickness=2, highlightbackground="#ffffff")
+            splash.attributes("-topmost", True)
+            
+            # Increased height to 240 to perfectly fit the new logo
+            width, height = 400, 240
+            x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+            y = (self.root.winfo_screenheight() // 2) - (height // 2)
+            splash.geometry(f"{width}x{height}+{x}+{y}")
+            
+            # --- THE LOGO INTEGRATION ---
+            try:
+                # 1. Open your universal icon
+                original_img = Image.open(resource_path("icon_white.ico"))
+                # 2. Resize it to a crisp 80x80 for the center of the screen
+                resized_img = original_img.resize((80, 80), Image.Resampling.LANCZOS)
+                # 3. Save as 'self.splash_logo' so Tkinter doesn't delete it from memory!
+                self.splash_logo = ImageTk.PhotoImage(resized_img)
+                # 4. Display it at the top
+                tk.Label(splash, image=self.splash_logo, bg="#011528").pack(pady=(35, 0))
+            except Exception as e:
+                print(f"Could not load logo: {e}")
+    
+            # The rest of your text, slightly adjusted padding
+            tk.Label(splash, text="LabTrackQR", bg="#011528", fg="white", font=("Montserrat", 26, "bold")).pack(pady=(5,0))
+            # tk.Label(splash, text="CLIENT", bg="#011528", fg="#9db2c6", font=("Montserrat", 16, "italic bold")).pack(pady=(0,2))
+            tk.Label(splash, text="Connecting to hardware & network...", bg="#011528", fg="#9db2c6", font=("Montserrat", 11, "italic")).pack()
+            
+            # Destroys itself after 2500 milliseconds (2.5 seconds)
+            splash.after(2500, splash.destroy)
 
     def check_queue(self):
         while not self.message_queue.empty():
@@ -281,7 +284,11 @@ class NotificationManager:
         tk.Label(sel_frame, text="Select Employee:", bg="#ffffff", fg="#333333", font=("Segoe UI", 11, "bold")).pack(anchor="w")
         
         emp_dict = self.storage.get_employees() if self.storage else {}
-        display_list = [f"{name} ({b_id})" for b_id, name in emp_dict.items()]
+        display_list = []
+        for b_id, data in emp_dict.items():
+            # Handle the new dictionary format, but fallback to string for backwards compatibility
+            name_str = data.get("full_name", "Unknown") if isinstance(data, dict) else data
+            display_list.append(f"{name_str} ({b_id})")
         display_list.sort()
             
         selected_user = tk.StringVar()
@@ -534,10 +541,29 @@ class NotificationManager:
         return f"{icon} {clean_str}"
 
     def open_log_viewer(self):
+        # --- ENFORCE 2 WINDOW LIMIT ---
+        if not hasattr(self, 'active_log_windows'):
+            self.active_log_windows = []
+        # Clean out closed windows
+        self.active_log_windows = [w for w in self.active_log_windows if w.winfo_exists()]
+        
+        if len(self.active_log_windows) >= 2:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONHAND)
+            self.spawn_notification("Window Limit Reached:\nMaximum of 2 log windows allowed.")
+            return
+
         viewer = tk.Toplevel(self.root)
+        self.active_log_windows.append(viewer)
         viewer.title("System Logs & Inventory")
         viewer.geometry("1000x550")
         viewer.configure(bg="#f4f4f4")
+        
+        # --- FIX TASKBAR ICON ---
+        try:
+            viewer.iconbitmap(default=resource_path("iconApp.ico"))
+        except:
+            pass
         
         # --- APPLY DARK MODE TO TITLE BAR ---
         self._apply_dark_title_bar(viewer)
@@ -583,12 +609,12 @@ class NotificationManager:
         last_data_hash = [""] 
 
         def open_external_file():
-            # Dynamically grabs NAS file if online, or Local file if offline
-            file_to_open = self.storage.get_active_file_path(current_tab[0])
-            try:
-                os.startfile(file_to_open)
-            except Exception as e:
-                self.spawn_notification(f"Could not open file:\n{e}")
+                    # Dynamically grabs NAS file if online, or Local file if offline
+                    file_to_open = self.storage.get_active_file_path(current_tab[0])
+                    try:
+                        os.startfile(file_to_open)
+                    except Exception as e:
+                        self.spawn_notification(f"Could not open file:\n{e}")
 
         def load_data(source_type, search_query="", is_auto_refresh=False):
             if source_type == 'inventory':

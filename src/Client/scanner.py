@@ -102,7 +102,10 @@ class ScannerNode:
         try:
             with serial.Serial(self.port, baudrate=9600, timeout=1) as ser:
                 
-                self.message_queue.put(f"Scanner Connected on {self.port}\nPlease scan your ID badge.")
+                if self.user:
+                    self.message_queue.put(f"Automatically signed in as:\n{self.user}")
+                else:
+                    self.message_queue.put(f"Scanner Connected on {self.port}\nPlease scan your ID badge.")
                 
                 while self.is_running:
                     if ser.in_waiting > 0:

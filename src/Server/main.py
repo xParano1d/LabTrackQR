@@ -84,6 +84,7 @@ def setup_tray(root):
 
     menu = pystray.Menu(
         pystray.MenuItem("View Logs & History", trigger_log_viewer), 
+        pystray.Menu.SEPARATOR,
         pystray.MenuItem("Manage Employee Badges", trigger_user_manager),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Run on Windows Startup", toggle_autostart, checked=lambda item: state['autostart']),
@@ -97,10 +98,11 @@ def setup_tray(root):
 SETTINGS_FILE = "server_settings.json"
 
 def get_master_directory():
+    SETTINGS_FILE_PATH = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'server_settings.json')
     """Checks for saved path. If missing or invalid, launches the Setup UI."""
-    if os.path.exists(SETTINGS_FILE):
+    if os.path.exists(SETTINGS_FILE_PATH):
         try:
-            with open(SETTINGS_FILE, 'r') as f:
+            with open(SETTINGS_FILE_PATH, 'r') as f:
                 data = json.load(f)
                 saved_path = data.get("PARENT_FOLDER")
                 if saved_path and os.path.exists(saved_path):
@@ -126,10 +128,11 @@ def get_master_directory():
 
     path_var = tk.StringVar()
     
+    # By removing fill=tk.X, the frame shrinks to fit the entry and button, and centers automatically
     input_frame = tk.Frame(setup_root, bg="#ffffff")
-    input_frame.pack(fill=tk.X, padx=20)
+    input_frame.pack(pady=(0, 5)) 
     
-    path_entry = tk.Entry(input_frame, textvariable=path_var, font=("Segoe UI", 10), state="readonly", width=35, relief="solid", bd=1)
+    path_entry = tk.Entry(input_frame, textvariable=path_var, font=("Segoe UI", 10), state="readonly", width=32, relief="solid", bd=1)
     path_entry.pack(side=tk.LEFT, ipady=4, padx=(0, 10))
 
     def browse_folder():
@@ -142,7 +145,10 @@ def get_master_directory():
     def save_and_start():
         selected_path = path_var.get()
         if selected_path and os.path.exists(selected_path):
-            with open(SETTINGS_FILE, 'w') as f:
+            # Ensure the directory exists in LocalAppData before saving the JSON
+            os.makedirs(os.path.dirname(SETTINGS_FILE_PATH), exist_ok=True)
+            
+            with open(SETTINGS_FILE_PATH, 'w') as f:
                 json.dump({"PARENT_FOLDER": selected_path}, f)
             setup_root.destroy()
         else:
