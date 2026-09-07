@@ -153,14 +153,7 @@ class ApiStorage:
             try:
                 with open(self.cache_file, 'r') as f: return json.load(f)
             except Exception: return []
-            
-    # --- UI COMPATIBILITY ---
-    def get_inventory_data(self):
-        with self.lock:
-            try:
-                with open(self.cache_file, 'r') as f: return json.load(f)
-            except Exception: return []
-            
+
     def get_available_history_months(self):
         """Scans the Z:\ drive for available history logs."""
         history_dir = os.path.join(BASE_PATH, "history_logs")
@@ -174,32 +167,43 @@ class ApiStorage:
                             months.append(f"{year}-{log.replace('log_', '').replace('.csv', '')}")
         return months
 
-    def get_specific_history(self, year, month):
-        """Reads a specific history CSV from the Z:\ drive."""
-        history_file = os.path.join(BASE_PATH, "history_logs", year, f"log_{month}.csv")
+    # --- UI COMPATIBILITY (API DRIVEN) ---
+    def get_available_history_months(self):
+        """Fetches the list of available history logs from the Server API."""
         try:
-            with open(history_file, 'r', encoding='utf-8') as f: 
-                return list(csv.reader(f, delimiter=';'))[1:]
-        except Exception: 
-            return []
-            
-    def get_all_time_history(self):
-        all_data = []
-        for ym in self.get_available_history_months():
-            y, m = ym.split('-')
-            all_data.extend(self.get_specific_history(y, m))
-        return all_data
-        
+            target_url = getattr(self, 'server_url', "http://127.0.0.1:5000")
+            url = f"{target_url}/api/get_archive_months"
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                return resp.json().get("months", [])
+        except Exception:
+            pass
+        return []
+
+    def fetch_view_data(self, source, year=None, month=None, sort_col="Date/Day", reverse=True):
+        """Asks the server to open, sort, and paginate the data before sending it to the UI."""
+        try:
+            target_url = getattr(self, 'server_url', "http://127.0.0.1:5000")
+            url = f"{target_url}/api/view_data"
+            params = {
+                "source": source, "year": year or "", "month": month or "",
+                "sort_col": sort_col, "reverse": str(reverse).lower()
+            }
+            resp = requests.get(url, params=params, timeout=10)
+            if resp.status_code == 200:
+                return resp.json().get("results", [])
+        except Exception:
+            pass
+        return []
+
     def get_active_file_path(self, file_type):
-        """Builds the direct path to the network drive for the external editor."""
+        from config import BASE_PATH
         if file_type == 'inventory':
             return os.path.join(BASE_PATH, "inventory.csv")
         else:
             now = datetime.now()
-            year_str = now.strftime("%Y")
-            month_str = now.strftime("%m")
-            return os.path.join(BASE_PATH, "history_logs", year_str, f"log_{month_str}.csv")
-        
+            return os.path.join(BASE_PATH, "history_logs", now.strftime("%Y"), f"log_{now.strftime('%m')}.csv")
+
     def get_active_file_path(self, file_type):
         """Builds the direct path to the network drive for the external editor."""
         if file_type == 'inventory':
