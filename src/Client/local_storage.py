@@ -204,12 +204,19 @@ class ApiStorage:
             now = datetime.now()
             return os.path.join(BASE_PATH, "history_logs", now.strftime("%Y"), f"log_{now.strftime('%m')}.csv")
 
-    def get_active_file_path(self, file_type):
+    def get_active_file_path(self, file_type, year=None, month=None):
         """Builds the direct path to the network drive for the external editor."""
         if file_type == 'inventory':
             return os.path.join(BASE_PATH, "inventory.csv")
         else:
-            now = datetime.now()
-            year_str = now.strftime("%Y")
-            month_str = now.strftime("%m")
-            return os.path.join(BASE_PATH, "history_logs", year_str, f"log_{month_str}.csv")
+            # If a specific archive month is selected, use it!
+            if year and month:
+                target_year = year
+                target_month = month
+            else:
+                # Otherwise, default to today
+                now = datetime.now()
+                target_year = now.strftime("%Y")
+                target_month = now.strftime("%m")
+                
+            return os.path.join(BASE_PATH, "history_logs", target_year, f"log_{target_month}.csv")

@@ -8,9 +8,10 @@ import os
 import winreg
 from PIL import Image
 import getpass
-
+import requests
 from config import ALLOWED_VIDS, ALLOWED_PIDS, SERVER_URL
 from local_storage import ApiStorage
+from logviewer import LogViewerWindow
 from scanner import ScannerManager
 from overlay import NotificationManager
 
@@ -119,7 +120,73 @@ def setup_tray(root, scanner_mgr):
     
     icon = pystray.Icon("LabTrackQR", image, "LabTrackQR", menu)
     icon.run()
-    
+
+def check_for_stale_samples(root_window, storage_manager, current_user_name, logviewer_class, notify_func):
+        """Silently checks for neglected samples and prompts the user to resolve them."""
+        from datetime import datetime
+        
+        def run_check():
+            try:
+                # Fetch Active Inventory from the API
+                target_url = getattr(storage_manager, 'server_url', "http://127.0.0.1:5000")
+                response = requests.get(f"{target_url}/api/view_data", params={"source": "inventory"}, timeout=5)
+                
+                if response.status_code == 200:
+                    data = response.json().get("results", [])
+                    stale_count = 0
+                    now = datetime.now()
+                    
+                    # Scan for samples that belong to THIS user and are 14+ days old
+                    for row in data:
+                        if len(row) >= 7 and row[6].lower() == current_user_name.lower() and "removed" not in row[2].lower():
+                            try:
+                                row_date = datetime.strptime(str(row[0]), "%Y-%m-%d")
+                                if (now - row_date).days >= 14:
+                                    stale_count += 1
+                            except Exception:
+                                pass
+                                
+                    if stale_count > 0:
+                        show_hard_stop_popup(stale_count)
+            except Exception:
+                pass # Silently fail if network is down
+        
+        def show_hard_stop_popup(count):
+            popup = tk.Toplevel(root_window)
+            popup.title("Attention Required")
+            popup.geometry("420x220") 
+            
+            # --- THE THEME UPGRADE ---
+            popup.overrideredirect(True) # Removes the ugly Windows title bar
+            popup.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#d9534f") # Clean white with red alert border
+            popup.attributes('-topmost', True) 
+            
+            # Center the window perfectly on the screen
+            popup.update_idletasks()
+            x = (popup.winfo_screenwidth() // 2) - (420 // 2)
+            y = (popup.winfo_screenheight() // 2) - (220 // 2)
+            popup.geometry(f'+{x}+{y}')
+            
+            # Disable closing via alt-f4
+            popup.protocol("WM_DELETE_WINDOW", lambda: None)
+            
+            # Clean, enterprise text styling
+            tk.Label(popup, text="⚠️ Action Required", bg="#ffffff", fg="#d9534f", font=("Segoe UI", 16, "bold")).pack(pady=(25, 5))
+            tk.Label(popup, text=f"You currently have {count} samples left unattended\nin the system for over 14 days.", bg="#ffffff", fg="#333333", font=("Segoe UI", 11)).pack(pady=10)
+            
+            def open_viewer():
+                popup.destroy()
+                # Opens LogViewer and automatically injects the search terms
+                logviewer_class(root_window, storage_manager, notify_func, is_server=False, current_user=current_user_name, initial_search=f"{current_user_name} OLD")
+                
+            # Crisp red button to match the theme
+            btn_frame = tk.Frame(popup, bg="#ffffff")
+            btn_frame.pack(pady=(10, 0))
+            tk.Button(btn_frame, text="Show Samples", command=open_viewer, bg="#d9534f", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20, cursor="hand2").pack()
+
+        # Start the 15-minute stealth countdown (900,000 ms)
+        root_window.after(5000, run_check)
+
 if __name__ == "__main__":
     storage = ApiStorage(SERVER_URL)
     
@@ -140,5 +207,8 @@ if __name__ == "__main__":
 
     app = NotificationManager(message_queue, storage, scanner_mgr)
     threading.Thread(target=setup_tray, args=(app.root, scanner_mgr), daemon=True).start()
+
+    if scanner_mgr.ad_fallback_name:
+        check_for_stale_samples(root_window=app.root, storage_manager=storage, current_user_name=scanner_mgr.ad_fallback_name, logviewer_class=LogViewerWindow, notify_func=app.spawn_notification)
     
     app.run()

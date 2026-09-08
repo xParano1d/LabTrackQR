@@ -34,15 +34,19 @@ class CsvStorage:
         if not self.sync_path: return False
         return os.path.exists(self.sync_path)
 
-    def get_active_file_path(self, file_type):
-        server_up = self.is_server_available()
+    def get_active_file_path(self, file_type, year=None, month=None):
         if file_type == 'inventory':
-            return os.path.join(self.sync_path, "inventory.csv") if server_up else self.inventory_file
+            return self.save_path
         else:
-            now = datetime.now()
-            year_str, month_str = now.strftime("%Y"), now.strftime("%m")
-            if server_up: return os.path.join(self.sync_path, "history_logs", year_str, f"log_{month_str}.csv")
-            else: return os.path.join(self.history_dir, year_str, f"log_{month_str}.csv")
+            if year and month:
+                target_year = year
+                target_month = month
+            else:
+                now = datetime.now()
+                target_year = now.strftime("%Y")
+                target_month = now.strftime("%m")
+                
+            return os.path.join(self.history_dir, target_year, f"log_{target_month}.csv")
 
     def _trigger_immediate_sync(self):
         if self.sync_path: threading.Thread(target=self._perform_sync, daemon=True).start()
@@ -70,6 +74,7 @@ class CsvStorage:
         if not os.path.exists(year_dir): os.makedirs(year_dir)
             
         history_file = os.path.join(year_dir, f"log_{month_str}.csv")
+        location = location.replace('LOC:', '').replace('LOC-', '').strip()
         row = [date_str, time_str, location, sample_id, name, notes, user]
         
         if not os.path.exists(history_file):
