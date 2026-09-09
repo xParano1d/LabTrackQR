@@ -2,6 +2,7 @@
 import os
 import json
 import csv
+import time
 import threading
 import concurrent.futures
 from flask import Flask, request, jsonify
@@ -15,14 +16,38 @@ class LabTrackAPI:
     def __init__(self, storage_manager):
         self.storage = storage_manager
         self.app = Flask(__name__)
-        
+
         # --- ULTRA-FAST RAM CACHE ---
-        self.view_cache = {} 
+        self.view_cache = {}
         self.cache_lock = threading.Lock()
-        
+
+        # --- LIVE USER TRACKING ---
+        self.active_clients = {}
+        threading.Thread(target=self._cleanup_inactive_clients, daemon=True).start()
+
         self._setup_routes()
 
+    def _cleanup_inactive_clients(self):
+        """Background loop that deletes clients who haven't pinged in 15 seconds."""
+        while True:
+            current_time = time.time()
+            for ip in list(self.active_clients.keys()):
+                # Bumped to 15 seconds to give network latency some breathing room
+                if current_time - self.active_clients.get(ip, 0) > 10:
+                    del self.active_clients[ip]
+            time.sleep(3)
+
+    def get_active_client_count(self):
+        return len(self.active_clients)
+
     def _setup_routes(self):
+        @self.app.before_request
+        def track_active_users():
+            """Intercepts every incoming API request and updates the client's heartbeat."""
+            client_ip = request.remote_addr
+            self.active_clients[client_ip] = time.time()
+            # print(f"[HEARTBEAT] Ping received from {client_ip}")
+        
         @self.app.route('/api/ping', methods=['GET'])
         def ping():
             return jsonify({"status": "online", "version": "1.0"}), 200

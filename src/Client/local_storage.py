@@ -10,20 +10,26 @@ from config import BASE_PATH
 class ApiStorage:
     def __init__(self, server_url):
         self.server_url = server_url.rstrip('/')
-        
+
         # Build the hidden offline vault in Windows %localappdata%
         self.local_appdata = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR')
         os.makedirs(self.local_appdata, exist_ok=True)
-        
+
         self.queue_file = os.path.join(self.local_appdata, 'offline_queue.json')
         self.cache_file = os.path.join(self.local_appdata, 'inventory_cache.json')
-        self.lock = threading.Lock()
         
+        self.emp_cache_file = os.path.join(self.local_appdata, 'employees_cache.json')
+        self.is_offline_mode = False
+        
+        self.lock = threading.Lock()
+
         if not os.path.exists(self.queue_file):
             with open(self.queue_file, 'w') as f: json.dump([], f)
         if not os.path.exists(self.cache_file):
             with open(self.cache_file, 'w') as f: json.dump([], f)
-            
+        if not os.path.exists(self.emp_cache_file):
+            with open(self.emp_cache_file, 'w') as f: json.dump({}, f)
+
         # Start the background engines
         threading.Thread(target=self._queue_processor, daemon=True).start()
         threading.Thread(target=self._cache_updater, daemon=True).start()
@@ -35,7 +41,16 @@ class ApiStorage:
             with self.lock:
                 try:
                     with open(self.queue_file, 'r') as f: queue = json.load(f)
-                except: queue = []
+                except json.JSONDecodeError:
+                    # --- THE FIX: Rescue corrupted queues ---
+                    import shutil
+                    # Back up the corrupted file so you can manually extract the text later
+                    shutil.copy(self.queue_file, self.queue_file + ".corrupted_backup")
+                    # Reset the live queue so the app doesn't permanently crash
+                    with open(self.queue_file, 'w') as f: json.dump([], f)
+                    queue = []
+                except Exception: 
+                    queue = []
             
             if not queue: continue
             
@@ -71,9 +86,24 @@ class ApiStorage:
     def get_employees(self):
         try:
             resp = requests.get(f"{self.server_url}/api/get_employees", timeout=2)
-            if resp.status_code == 200: return resp.json().get('employees', {})
-        except Exception: pass
-        return {}
+            if resp.status_code == 200:
+                emps = resp.json().get('employees', {})
+                self.is_offline_mode = False  # We are online!
+                
+                # Save a fresh copy to the local cache
+                with self.lock:
+                    with open(self.emp_cache_file, 'w') as f: json.dump(emps, f)
+                return emps
+        except Exception:
+            self.is_offline_mode = True  # Network drop detected!
+            pass
+            
+        # --- THE FALLBACK: Load from local cache if server is dead ---
+        with self.lock:
+            try:
+                with open(self.emp_cache_file, 'r') as f: return json.load(f)
+            except Exception:
+                return {}
 
     def get_employee_name(self, badge_id):
         emp_data = self.get_employees().get(badge_id)
@@ -94,14 +124,14 @@ class ApiStorage:
     def add_employee(self, badge_id, first_name, last_name, ad_username=""):
         """Sends the new user registration to the Server API."""
         payload = {
-            "badge_id": badge_id, "first_name": first_name, 
+            "badge_id": badge_id, "first_name": first_name,
             "last_name": last_name, "ad_username": ad_username
         }
         try:
             resp = requests.post(f"{self.server_url}/api/add_employee", json=payload, timeout=3)
-            print(f"API Response: {resp.status_code}") 
-        except Exception as e:
-            print(f"NETWORK ERROR: Could not reach Server at {self.server_url} - {e}") 
+            return resp.status_code == 200
+        except Exception:
+            return False
 
     # --- OFFLINE CACHE VALIDATION ---
     def sample_exists(self, sample_id):

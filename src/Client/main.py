@@ -171,13 +171,13 @@ def check_for_stale_samples(root_window, storage_manager, current_user_name, log
             popup.protocol("WM_DELETE_WINDOW", lambda: None)
             
             # Clean, enterprise text styling
-            tk.Label(popup, text="⚠️ Action Required", bg="#ffffff", fg="#d9534f", font=("Segoe UI", 16, "bold")).pack(pady=(25, 5))
+            tk.Label(popup, text="⚠️ Action Required ⚠️", bg="#ffffff", fg="#d9534f", font=("Segoe UI", 16, "bold")).pack(pady=(25, 5))
             tk.Label(popup, text=f"You currently have {count} samples left unattended\nin the system for over 14 days.", bg="#ffffff", fg="#333333", font=("Segoe UI", 11)).pack(pady=10)
             
             def open_viewer():
                 popup.destroy()
                 # Opens LogViewer and automatically injects the search terms
-                logviewer_class(root_window, storage_manager, notify_func, is_server=False, current_user=current_user_name, initial_search=f"{current_user_name} OLD")
+                logviewer_class(root_window, storage_manager, notify_func, is_server=False, current_user=current_user_name, initial_filters=["ME", "old"])
                 
             # Crisp red button to match the theme
             btn_frame = tk.Frame(popup, bg="#ffffff")
@@ -193,22 +193,31 @@ if __name__ == "__main__":
     # --- THE AD AUTO-LOGIN LOGIC ---
     ad_username = getpass.getuser()
     ad_employee_data = storage.get_employee_by_ad(ad_username)
-    
+
     scanner_mgr = ScannerManager(ALLOWED_VIDS, ALLOWED_PIDS, message_queue, storage)
-    
-    # Inject AD user if they exist in the DB, otherwise queue Registration
+
+    # Inject AD user if they exist in the DB (or cache!), otherwise queue Registration
     if ad_employee_data:
         scanner_mgr.ad_fallback_name = ad_employee_data.get('full_name')
+        
+        # Notify the user if we are coasting on cached credentials
+        if storage.is_offline_mode:
+            message_queue.put("⚠️ SERVER OFFLINE ⚠️\nUsing cached profile.\nScans will be saved locally.")
     else:
-        # User is brand new. Queue a specialized prompt to register their Windows account.
-        message_queue.put(f"COMMAND:REGISTER_AD_USER:{ad_username}")
+        # If they are completely new AND offline, we can't register them
+        if storage.is_offline_mode:
+            message_queue.put("⚠️ SERVER OFFLINE ⚠️\nCannot register new users.\n")
+        else:
+            # User is brand new. Queue a specialized prompt to register their Windows account.
+            message_queue.put(f"COMMAND:REGISTER_AD_USER:{ad_username}")
 
     scanner_mgr.start_monitoring()
 
     app = NotificationManager(message_queue, storage, scanner_mgr)
     threading.Thread(target=setup_tray, args=(app.root, scanner_mgr), daemon=True).start()
 
-    if scanner_mgr.ad_fallback_name:
+    # Disable the stale check if we are offline (it relies on fresh server data)
+    if scanner_mgr.ad_fallback_name and not storage.is_offline_mode:
         check_for_stale_samples(root_window=app.root, storage_manager=storage, current_user_name=scanner_mgr.ad_fallback_name, logviewer_class=LogViewerWindow, notify_func=app.spawn_notification)
-    
+
     app.run()

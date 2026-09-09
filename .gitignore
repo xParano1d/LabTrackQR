@@ -18,6 +18,7 @@ build/
 scans_log.txt
 scans_log.csv
 name.py
+test_data.py
 *.csv
 *.json
 

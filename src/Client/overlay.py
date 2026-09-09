@@ -4,6 +4,8 @@ import os
 import ctypes
 import qrcode
 import tkinter as tk
+import threading
+import requests
 from PIL import Image, ImageTk
 from logviewer import LogViewerWindow # Uses the shared engine!
 
@@ -52,6 +54,27 @@ class NotificationManager:
         self.root.withdraw() 
         self.show_splash_screen()
         self.root.after(4500, self.check_queue)
+        
+        # --- Start the background heartbeat! ---
+        self.root.after(5000, self.send_heartbeat)
+
+    def send_heartbeat(self):
+        """Silently pings the server to prove this client is online."""
+        if self.storage:
+            target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
+            
+            def ping_server():
+                try:
+                    # A quick, 2-second timeout ping just to trigger the server interceptor
+                    requests.get(f"{target_url}/api/ping", timeout=2)
+                except Exception:
+                    pass
+            
+            # Fire and forget in a background thread so it never freezes the client's screen
+            threading.Thread(target=ping_server, daemon=True).start()
+            
+        # Run exactly every 5 seconds (safely beats the server's 10-second purge rule)
+        self.root.after(5000, self.send_heartbeat)
 
     def show_splash_screen(self):
         splash = tk.Toplevel(self.root)
@@ -243,19 +266,25 @@ class NotificationManager:
             b_id = entry_badge.get().strip()
             f_name = entry_first.get().strip()
             l_name = entry_last.get().strip()
-            
+
             if len(b_id) == 8 and b_id.isdigit() and f_name and l_name:
                 full_name = f"{f_name} {l_name}"
+                
+                # --- THE FIX ---
                 if self.storage:
-                    self.storage.add_employee(b_id, f_name, l_name, ad_username)
-                    
+                    success = self.storage.add_employee(b_id, f_name, l_name, ad_username)
+                    if not success:
+                        self.spawn_notification("Registration Failed:\nCould not reach server.")
+                        return  # Stops the function and keeps the window open!
+                # ---------------
+
                 if self.scanner_mgr:
                     for node in self.scanner_mgr.active_scanners.values():
-                        if node.user is None or ad_username: 
+                        if node.user is None or ad_username:
                             node.user = full_name
                             if ad_username: node.ad_fallback_name = full_name
                             self.message_queue.put(f"Login Successful:\nWelcome {full_name}!")
-                            
+
                 self.spawn_notification(f"Registered Successfully:\n{full_name}")
                 reg_win.destroy()
             else:

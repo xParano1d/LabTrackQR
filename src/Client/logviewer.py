@@ -29,40 +29,65 @@ def get_theme_icon():
         return "icon_white.ico"
 
 class LogViewerWindow:
-    def __init__(self, parent_root, storage, notify_callback, is_server=False, current_user="", initial_search=""):
+    def __init__(self, parent_root, storage, notify_callback, is_server=False, current_user="", initial_search="", initial_filters=None):
         self.storage = storage
         self.notify = notify_callback
         self.is_server = is_server
         self.current_user = current_user
         
         self.viewer = tk.Toplevel(parent_root)
-        title = "System Logs & Inventory"
-        self.viewer.title(title)
+        self.viewer.title("System Logs & Inventory")
         self.viewer.geometry("1000x550")
         self.viewer.configure(bg="#f4f4f4")
         
         try:
             self.viewer.iconbitmap(default=resource_path(get_theme_icon()))
-        except:
-            pass
+        except: pass
             
         self._apply_dark_title_bar(self.viewer)
         
         self.current_tab = ['inventory'] 
         self.current_history_target = [None, None] 
         self.last_data_hash = [""] 
-        
         self.current_sort_col = "Date/Day"
         self.current_sort_reverse = True
         
         self._build_ui()
         
-        # Inject the initial search query (e.g. from the popup button)
+        if initial_filters:
+            for f in initial_filters:
+                if f in self.tag_widgets:
+                    self.active_filters.add(f)
+                    self.tag_widgets[f].config(bg="#011528", fg="white")
+                    
         if initial_search:
             self.search_var.set(initial_search)
             
-        self.load_data('inventory', search_query=initial_search)
+        self.execute_search()
         self.auto_refresh()
+
+    def switch_view(self, source, year=None, month=None):
+        """Cleans up the UI (wipes search and buttons) before changing tabs."""
+        self.search_var.set("")
+        if hasattr(self, 'active_filters'):
+            self.active_filters.clear()
+        if hasattr(self, 'tag_widgets'):
+            for lbl in self.tag_widgets.values():
+                lbl.config(bg="#e8e8e8", fg="#333333") # Reset to grey
+                
+        # --- THE FIX: Instantly change state so auto-refresh backs off ---
+        self.current_tab[0] = source
+        self.current_history_target[0] = year
+        self.current_history_target[1] = month
+        
+        # Instantly wipe the screen and show a loading indicator 
+        # so you know the button click actually registered!
+        self.tree.delete(*self.tree.get_children())
+        self.tree.insert("", tk.END, values=("", "", "⏳ LOADING DATA...", "Please wait...", "Fetching from server", "", ""))
+        self.viewer.update_idletasks()
+        
+        # Now safely fetch the data in the background
+        self.load_data(source, "", year=year, month=month)
 
     def _apply_dark_title_bar(self, window):
         try:
@@ -157,16 +182,19 @@ class LogViewerWindow:
         tags_frame.pack(side=tk.TOP, anchor="e", pady=(2, 0))
 
         self.active_filters = set() # Stores the hidden search terms
-        self.tag_widgets = {}       # Stores the buttons to change their colors
+        self.tag_widgets = {}       # Stores the buttons to change their colors    
 
-        # "Clear" has been removed to drastically shrink the horizontal width
-        quick_tags = [
-            ("My Samples", "ME"),
+        # Hide "My Samples" on the Server
+        quick_tags = []
+        if not self.is_server:
+            quick_tags.append(("My Samples", "ME"))
+            
+        quick_tags.extend([
             ("Today", "today"),
             ("Old", "old"),
             ("Pending", "pending-storage"), 
             ("Removed", "removed")
-        ]
+        ])
 
         def toggle_tag(keyword, lbl_widget):
             # 1. Resolve dynamic targets
@@ -236,33 +264,43 @@ class LogViewerWindow:
         tk.Label(self.viewer, text="Tip: Select a row and press Ctrl+C to copy data", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
 
         now = datetime.now()
-        tk.Button(btn_frame, text="View Active Inventory", command=lambda: self.load_data('inventory', ""), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.load_data('history_specific', "", year=y, month=m), bg="#445566", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
 
+        tk.Button(btn_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), bg="#445566", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
+
+        self.history_btn = tk.Menubutton(btn_frame, text="Archive", bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12, activebackground="#777777", activeforeground="white", cursor="hand2")
+        self.history_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.main_menu = tk.Menu(self.history_btn, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
+        self.history_btn.config(menu=self.main_menu)
+        self.main_menu.add_command(label="Loading archives...", state="disabled") 
+        
+        threading.Thread(target=self._build_archive_menu_async, daemon=True).start()
+
+        tk.Button(btn_frame, text="Open in External Editor", command=self.open_external_file, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=5)
+
+    def _build_archive_menu_async(self):
         available_history = self.fetch_archive_months() 
+        self.viewer.after(0, lambda: self._render_archive_menu(available_history))
+        
+    def _render_archive_menu(self, available_history):
+        self.main_menu.delete(0, tk.END)
         history_tree = {}
         for ym in available_history:
             y, m = ym.split('-')
             if y not in history_tree: history_tree[y] = []
             history_tree[y].append(m)
 
-        history_btn = tk.Menubutton(btn_frame, text="Archive", bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12, activebackground="#777777", activeforeground="white", cursor="hand2")
-        history_btn.pack(side=tk.LEFT, padx=5)
-        main_menu = tk.Menu(history_btn, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
-        history_btn.config(menu=main_menu)
-
         if not history_tree:
-            main_menu.add_command(label="No Archives Found", state="disabled")
+            self.main_menu.add_command(label="No Archives Found", state="disabled")
         else:
             month_names = {"01": "January", "02": "February", "03": "March", "04": "April", "05": "May", "06": "June", 
                            "07": "July", "08": "August", "09": "September", "10": "October", "11": "November", "12": "December"}
             for year in sorted(history_tree.keys(), reverse=True):
-                year_menu = tk.Menu(main_menu, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
-                main_menu.add_cascade(label=f"Year: {year}", menu=year_menu)
+                year_menu = tk.Menu(self.main_menu, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
+                self.main_menu.add_cascade(label=f"Year: {year}", menu=year_menu)
                 for month in sorted(history_tree[year], reverse=True):
-                    year_menu.add_command(label=f"{month_names.get(month, month)} ({month})", command=lambda y=year, m=month: self.load_data('history_specific', "", year=y, month=m))
-
-        tk.Button(btn_frame, text="Open in External Editor", command=self.open_external_file, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=5)
+                    year_menu.add_command(label=f"{month_names.get(month, month)} ({month})", command=lambda y=year, m=month: self.switch_view('history_specific', year=y, month=m))
 
     def _update_sort_headers(self, active_col, is_reverse):
         for c in self.tree["columns"]:
@@ -276,15 +314,36 @@ class LogViewerWindow:
         self.current_sort_col = col
         self.current_sort_reverse = reverse
         self._update_sort_headers(col, reverse)
-        if self.current_tab[0] == 'deep_search':
+
+        data_list = []
+        for child in self.tree.get_children(''):
+            date_val = self.tree.set(child, 'Date/Day')
+            time_val = self.tree.set(child, 'Time')
+            absolute_time = f"{date_val} {time_val}"
+            
             if col in ("Date/Day", "Time"):
-                data_list = [(f"{self.tree.set(child, 'Date/Day')} {self.tree.set(child, 'Time')}", child) for child in self.tree.get_children('')]
+                primary_val = absolute_time
             else:
-                data_list = [(self.tree.set(child, col).lower(), child) for child in self.tree.get_children('')]
-            data_list.sort(reverse=reverse)
-            for index, (val, child) in enumerate(data_list): self.tree.move(child, '', index)
-        else:
-            self.load_data(self.current_tab[0], self.search_var.get(), year=self.current_history_target[0], month=self.current_history_target[1])
+                primary_val = self.tree.set(child, col)
+            
+            data_list.append((primary_val, absolute_time, child))
+
+        def smart_sort_key(item):
+            primary = str(item[0]).strip().lower()
+            tie_breaker = str(item[1])
+            
+            if primary.startswith("smp:"):
+                try:
+                    return (0, int(primary.replace("smp:", "")), tie_breaker)
+                except ValueError:
+                    pass
+                    
+            return (1, primary, tie_breaker)
+
+        data_list.sort(key=smart_sort_key, reverse=reverse)
+
+        for index, (*_, child) in enumerate(data_list):
+            self.tree.move(child, '', index)
 
     def trigger_manual_search(self, event=None):
         """Clears all active Quick Tags when the user performs a manual text search."""
@@ -350,13 +409,27 @@ class LogViewerWindow:
             self.tree.insert("", tk.END, text=item_id, values=display_row, tags=row_tags)
             
         if warning_msg: self.notify(warning_msg)
-        self._update_sort_headers(self.current_sort_col, self.current_sort_reverse)
+        # --- THE FIX: Force the UI to physically sort the new data ---
+        self.treeview_sort_column(self.current_sort_col, self.current_sort_reverse)
 
     def load_data(self, source_type, search_query="", is_auto_refresh=False, year=None, month=None):
         if source_type == 'deep_search': return 
 
+        # Offload the slow network request to a background thread!
+        threading.Thread(
+            target=self._threaded_load_data, 
+            args=(source_type, search_query, is_auto_refresh, year, month), 
+            daemon=True
+        ).start()
+
+    def _threaded_load_data(self, source_type, search_query, is_auto_refresh, year, month):
         data = self.fetch_view_data(source=source_type, year=year, month=month, sort_col=self.current_sort_col, reverse=self.current_sort_reverse)
         
+        # Once the server replies, safely push the data back to the UI thread
+        if self.viewer.winfo_exists():
+            self.viewer.after(0, lambda: self._render_loaded_data(data, source_type, search_query, is_auto_refresh, year, month))
+
+    def _render_loaded_data(self, data, source_type, search_query, is_auto_refresh, year, month):
         unique_data = []
         seen_rows = set()
         for row in data:
@@ -383,7 +456,6 @@ class LogViewerWindow:
         if filter_old: search_terms.remove("old")
         
         now = datetime.now()
-        
         is_active_inventory = (source_type == 'inventory')
         
         for row in data:
@@ -421,19 +493,13 @@ class LogViewerWindow:
 
     def auto_refresh(self):
         if self.viewer.winfo_exists():
-            typed_query = self.search_var.get().strip()
             
-            # Only auto-refresh if they aren't actively typing a manual search
-            if len(typed_query) < 2:
-                # FIX: Stitch the hidden buttons into the background refresh!
+            if self.current_tab[0] == 'inventory':
+                typed_query = self.search_var.get().strip()
                 hidden_query = " ".join(getattr(self, 'active_filters', set()))
                 full_query = f"{typed_query} {hidden_query}".strip()
-                
-                if self.current_tab[0] == 'deep_search': 
-                    self.current_tab[0] = 'inventory'
+                self.load_data('inventory', full_query, is_auto_refresh=True)
                     
-                self.load_data(self.current_tab[0], full_query, is_auto_refresh=True, year=self.current_history_target[0], month=self.current_history_target[1])
-                
             self.viewer.after(2000, self.auto_refresh)
 
     def copy_selection(self, event=None):

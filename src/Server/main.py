@@ -6,6 +6,7 @@ import pystray
 import sys
 import os
 import winreg
+import time
 from PIL import Image
 import json
 from tkinter import filedialog, messagebox
@@ -63,8 +64,9 @@ def is_taskbar_dark_mode():
 
 state = {'autostart': is_autostart_enabled()}
 
-def setup_tray(root):
-    try:        
+# Pass api_server into the tray setup!
+def setup_tray(root, api_server):
+    try:
         if is_taskbar_dark_mode():
             image = Image.open(resource_path("icon_white.ico")).convert("RGBA")
         else:
@@ -79,9 +81,9 @@ def setup_tray(root):
         set_autostart(state['autostart'])
     def on_quit(icon, item):
         icon.stop()
-        root.quit() 
-        os._exit(0) 
-
+        root.quit()
+        os._exit(0)
+            
     menu = pystray.Menu(
         pystray.MenuItem("View Logs History", trigger_log_viewer), 
         pystray.Menu.SEPARATOR,
@@ -90,8 +92,21 @@ def setup_tray(root):
         pystray.MenuItem("Run on Windows Startup", toggle_autostart, checked=lambda item: state['autostart']),
         pystray.MenuItem("Quit Server", on_quit)
     )
-    
     icon = pystray.Icon("LabTrackQR_Server", image, "LabTrack Server", menu)
+
+    def tray_updater():
+        while True:
+            time.sleep(2)
+            if api_server:
+                count = api_server.get_active_client_count()
+                # 1. Update the hover text (No right-click needed!)
+                icon.title = f"Live Clients: {count} | LabTrack Server"
+                # 2. Force the right-click menu to visibly redraw!
+                icon.update_menu()
+
+    # Start the updater right before running the icon
+    threading.Thread(target=tray_updater, daemon=True).start()
+
     icon.run()
 
 # --- FIRST LAUNCH SETUP LOGIC ---
@@ -186,6 +201,6 @@ if __name__ == "__main__":
 
     # 5. Start the UI Dashboard
     app = NotificationManager(message_queue, storage, scanner_mgr=None)
-    threading.Thread(target=setup_tray, args=(app.root,), daemon=True).start()
+    threading.Thread(target=setup_tray, args=(app.root, api_server), daemon=True).start()
     
     app.run()

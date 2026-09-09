@@ -13,36 +13,37 @@
 ✔ launch on windows startup option or by default @high @done (6/14/2026, 1:23:41 AM)
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 ✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
-☐ prepare instruction for scanner configuration @critical 
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
 ☐ graphical style revamp to fit thmx palette @low migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ??? @cancelled (6/13/2026, 2:21:16 AM)
+☐ dark/white theme @low (make sure icons are correct)
 ☐ animate blinking for error and action reqiured popups
+☐ add keybind actions @low 
 ☐ mapped storage??? like visualization of storage and where things are etc. @low
 ✔ Whole History Viewer (because rn you can only see actual month history) OPTIMIZATION NEEDED (server recives client queries) @critical @today @done (9/7/2026, 11:28:12 AM)
 ✔ deep search allowing to search for history of everything in the lab @done (9/7/2026, 11:27:49 AM)
 ✔ Log Viewer Search Filters and small rework (it has to be functional and more user friendly) @low @today @done (9/8/2026, 3:08:22 PM)
 ✔ Log Viewer add sorting by header @done (9/7/2026, 1:28:17 PM)
-☐ log viewer sorting with name or other header should be olso sorted by date to keep everything nice and clean @today
-☐ fix bug in sorting that takes search bar contents into account while searching for some reason @today
+✔ log viewer sorting with name or other header should be olso sorted by date to keep everything nice and clean @today @done (9/9/2026, 11:13:23 AM)
+✔ fix bug in sorting that takes search bar contents into account while sorting for some reason @today @done (9/9/2026, 11:56:10 AM)
 ✔ alerts about samples that sit inside system for too long @high @today @done (9/8/2026, 2:40:17 PM)
-☐ no connection with server handling with reconnect and all (especially after opening an app it lets you to re-register db present employee) @critical
-☐ better error handling (popup etc) @today
-☐ limit to only one app instance (with error on screen if you want to open another one) @critical
-☐ add keybind actions @high 
-☐ dark/white theme @low (make sure icons are correct)
-☐ minimal height and width for a window @high
-☐ fix random performance issue on log viewer (random freezes every 5 seconds) NEEDS TESTING IT HAPPENED ONLY FEW TIMES
+✔ no connection with server handling with reconnect and all (especially after opening an app it lets you to re-register db present employee) @critical @done (9/9/2026, 3:08:45 PM)
+✔ better error handling (popup etc) @today @done (9/9/2026, 3:08:33 PM)
+☐ limit to only one app instance (with error on screen if you want to open another one) @critical @today
+☐ minimal height and width for a window @high @today
 ✔ SERVER AND CLIENT SEPARATION @today @done (9/3/2026, 3:54:06 PM)
 SERVER:
     ✔ Server configuration after first launch (path etc.) [and some protection if path is not present then point to config again] @done (9/3/2026, 3:54:46 PM)
     ✘ make whole database of users around lab and stick with new user init to server only @cancelled (9/4/2026, 2:09:16 PM)
     ✔ overlay for server CLEANUP @low @done (9/7/2026, 11:27:30 AM)
     ☐ employees management window (edit, create, delete manually just in case) @high
+    ☐ log viewer records editor (edit, create??, delete) @high
     ✔ remove "LOC:" from location data in the csv storage @critical @done (9/8/2026, 10:10:07 AM)
-CLIENT:
-    ✔ doesnt create folders @done (9/3/2026, 3:56:11 PM)
-    ✔ only read write existing log files [and some protection if path is not present then point to config again] @done (9/3/2026, 3:56:15 PM)
-    ✘ pop-up account synchronization (session sharing flask username = request.environ.get('REMOTE_USER') if username then login else access denied) @cancelled (9/3/2026, 11:22:53 AM)
-    ✔ one and more login sessions handling @done (9/4/2026, 12:36:12 PM)
-    ✔ automatic reloging to AD user after 5 min of inactivity after reloging user @done (9/4/2026, 1:09:53 PM)
+    ✔ live user counter based ping heartbeat @done (9/9/2026, 12:36:32 PM)
+    CLIENT:
+        ✔ doesnt create folders @done (9/3/2026, 3:56:11 PM)
+        ✔ only read write existing log files [and some protection if path is not present then point to config again] @done (9/3/2026, 3:56:15 PM)
+        ✘ pop-up account synchronization (session sharing flask username = request.environ.get('REMOTE_USER') if username then login else access denied) @cancelled (9/3/2026, 11:22:53 AM)
+        ✔ one and more login sessions handling @done (9/4/2026, 12:36:12 PM)
+        ✔ automatic reloging to AD user after 5 min of inactivity after reloging user @done (9/4/2026, 1:09:53 PM)
+☐ prepare instruction for scanner configuration @critical 

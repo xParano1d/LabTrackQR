@@ -226,8 +226,12 @@ class ScannerNode:
 
                         except UnicodeDecodeError:
                             pass
-        except serial.SerialException:
-            self.message_queue.put(f"Scanner {self.port} unplugged!")
+        except serial.SerialException as e:
+            # Check if Windows is telling us the port is locked by another app
+            if "Access is denied" in str(e):
+                self.message_queue.put(f"Scanner on {self.port} Locked!\nClose other apps using it.")
+            else:
+                self.message_queue.put(f"Scanner on {self.port} unplugged!")
         finally:
             self.is_running = False
             self._clear_timer()
