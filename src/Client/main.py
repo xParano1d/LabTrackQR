@@ -6,14 +6,17 @@ import pystray
 import sys
 import os
 import winreg
-from PIL import Image
+import ctypes
 import getpass
 import requests
+from PIL import Image
+from tkinter import messagebox
 from config import ALLOWED_VIDS, ALLOWED_PIDS, SERVER_URL
 from local_storage import ApiStorage
 from logviewer import LogViewerWindow
 from scanner import ScannerManager
 from overlay import NotificationManager
+
 
 message_queue = queue.Queue()
 
@@ -188,6 +191,20 @@ def check_for_stale_samples(root_window, storage_manager, current_user_name, log
         root_window.after(5000, run_check)
 
 if __name__ == "__main__":
+    # --- 1. SINGLE INSTANCE LOCK (MUTEX) ---
+    mutex_name = "Global\\LabTrackQR_Client_Instance_Lock"
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
+
+    if ctypes.windll.kernel32.GetLastError() == 183: 
+        err_root = tk.Tk()
+        err_root.withdraw()
+        err_root.attributes("-topmost", True) 
+        messagebox.showwarning(
+            "LabTrackQR Already Running", 
+            "LabTrack is already running in the background!\n\nPlease check your system tray (near the clock) to access it."
+        )
+        sys.exit(0) # Instantly kill this duplicate instance
+
     storage = ApiStorage(SERVER_URL)
     
     # --- THE AD AUTO-LOGIN LOGIC ---
@@ -200,9 +217,9 @@ if __name__ == "__main__":
     if ad_employee_data:
         scanner_mgr.ad_fallback_name = ad_employee_data.get('full_name')
         
-        # Notify the user if we are coasting on cached credentials
+        # Notify the user of the network state on boot
         if storage.is_offline_mode:
-            message_queue.put("⚠️ SERVER OFFLINE ⚠️\nUsing cached profile.\nScans will be saved locally.")
+            message_queue.put("⚠️ SERVER OFFLINE ⚠️\nUsing cached profile.\nData will be saved locally.")
     else:
         # If they are completely new AND offline, we can't register them
         if storage.is_offline_mode:

@@ -121,6 +121,11 @@ class LogViewerWindow:
         return []
 
     def fetch_view_data(self, source, year=None, month=None, sort_col="Date/Day", reverse=True):
+        if getattr(self.storage, 'is_offline_mode', False):
+            if source == 'inventory':
+                return self.storage.get_inventory_data()
+            return [] # Cannot view history archives while offline
+
         try:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
             url = f"{target_url}/api/view_data"
@@ -128,11 +133,16 @@ class LogViewerWindow:
                 "source": source, "year": year or "", "month": month or "",
                 "sort_col": sort_col, "reverse": str(reverse).lower()
             }
-            resp = requests.get(url, params=params, timeout=10)
+
+            resp = requests.get(url, params=params, timeout=3)
             if resp.status_code == 200:
                 return resp.json().get("results", [])
         except Exception:
             pass
+            
+        if source == 'inventory' and getattr(self, 'storage', None):
+            return self.storage.get_inventory_data()
+            
         return []
 
     def _build_ui(self):
@@ -162,7 +172,7 @@ class LogViewerWindow:
             s_img = Image.open(resource_path("search.png")).resize((22, 22), Image.Resampling.LANCZOS)
             self.icon_search = ImageTk.PhotoImage(s_img)
             
-            c_img = Image.open(resource_path("backspace.png")).resize((22, 22), Image.Resampling.LANCZOS)
+            c_img = Image.open(resource_path("delete.png")).resize((22, 22), Image.Resampling.LANCZOS)
             self.icon_clear = ImageTk.PhotoImage(c_img)
             
             # Create buttons using the images instead of text
@@ -489,7 +499,7 @@ class LogViewerWindow:
                 try: self.tree.selection_add(inserted)
                 except Exception: pass
 
-        self._update_sort_headers(self.current_sort_col, self.current_sort_reverse)
+        self.treeview_sort_column(self.current_sort_col, self.current_sort_reverse)
 
     def auto_refresh(self):
         if self.viewer.winfo_exists():

@@ -6,6 +6,7 @@ import qrcode
 import tkinter as tk
 import threading
 import requests
+from tkinter import ttk
 from PIL import Image, ImageTk
 from logviewer import LogViewerWindow # Uses the shared engine!
 
@@ -59,21 +60,37 @@ class NotificationManager:
         self.root.after(5000, self.send_heartbeat)
 
     def send_heartbeat(self):
-        """Silently pings the server to prove this client is online."""
+        """Silently pings the server to prove this client is online and tracks connection state."""
         if self.storage:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
-            
+
             def ping_server():
                 try:
                     # A quick, 2-second timeout ping just to trigger the server interceptor
-                    requests.get(f"{target_url}/api/ping", timeout=2)
+                    resp = requests.get(f"{target_url}/api/ping", timeout=2)
+                    
+                    if resp.status_code == 200:
+                        # If we WERE offline, but now we succeeded: Reconnect!
+                        if getattr(self.storage, 'is_offline_mode', False):
+                            self.storage.is_offline_mode = False
+                            import winsound
+                            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                            # The polished "We are back" popup
+                            self.message_queue.put("SERVER CONNECTED \nOnline mode active.\nSyncing data in background...")
+                
                 except Exception:
-                    pass
-            
-            # Fire and forget in a background thread so it never freezes the client's screen
+                    # If we WERE online, but the ping failed: Disconnect!
+                    if not getattr(self.storage, 'is_offline_mode', True):
+                        self.storage.is_offline_mode = True
+                        import winsound
+                        winsound.MessageBeep(winsound.MB_ICONHAND)
+                        # The "Server died" popup
+                        self.message_queue.put("⚠️ CONNECTION LOST ⚠️\nSwitched to Offline Mode.\nData will be saved locally.")
+
+            # Fire and forget in a background thread
             threading.Thread(target=ping_server, daemon=True).start()
-            
-        # Run exactly every 5 seconds (safely beats the server's 10-second purge rule)
+
+        # Run exactly every 5 seconds
         self.root.after(5000, self.send_heartbeat)
 
     def show_splash_screen(self):
@@ -301,7 +318,7 @@ class NotificationManager:
 
     def open_employee_directory(self):
         manager = tk.Toplevel(self.root)
-        manager.title("Manage Employee Badges")
+        manager.title("Employee Login Badges")
         manager.geometry("500x530")
         manager.overrideredirect(True)
         manager.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#011528")
@@ -315,11 +332,12 @@ class NotificationManager:
         close_btn = tk.Button(manager, text="✕", command=manager.destroy, bg="#ffffff", fg="#999999", font=("Segoe UI", 12, "bold"), relief="flat", activebackground="#ffcccc", cursor="hand2")
         close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
 
-        tk.Label(manager, text="Manage Employee Badges", bg="#ffffff", fg="#011528", font=("Segoe UI", 18, "bold")).pack(pady=(20, 10))
-        
+        # Refined Header
+        tk.Label(manager, text="Employee Login Badges", bg="#ffffff", fg="#011528", font=("Segoe UI", 18, "bold")).pack(pady=(25, 5))
+        tk.Label(manager, text="Select a user to automatically generate their QR card", bg="#ffffff", fg="#666666", font=("Segoe UI", 10, "italic")).pack(pady=(0, 15))
+
         sel_frame = tk.Frame(manager, bg="#ffffff")
-        sel_frame.pack(fill=tk.X, padx=30, pady=10)
-        tk.Label(sel_frame, text="Select Employee:", bg="#ffffff", fg="#333333", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        sel_frame.pack(fill=tk.X, padx=40, pady=5)
         
         emp_dict = self.storage.get_employees() if self.storage else {}
         display_list = []
@@ -327,39 +345,67 @@ class NotificationManager:
             name_str = data.get("full_name", "Unknown") if isinstance(data, dict) else data
             display_list.append(f"{name_str} ({b_id})")
         display_list.sort()
-            
+
+        # --- THE COMBOBOX STYLING UPGRADE ---
+        # 1. Style the Dropdown List (The part that pops out)
+        manager.option_add('*TCombobox*Listbox.background', '#ffffff')
+        manager.option_add('*TCombobox*Listbox.foreground', '#333333')
+        manager.option_add('*TCombobox*Listbox.selectBackground', '#011528')
+        manager.option_add('*TCombobox*Listbox.selectForeground', '#ffffff')
+        manager.option_add('*TCombobox*Listbox.font', ('Segoe UI', 11))
+        
+        # 2. Style the Main Box (Prevents the solid blue highlight)
+        style = ttk.Style()
+        style.map('Modern.TCombobox', 
+                  fieldbackground=[('readonly', '#ffffff')],
+                  selectbackground=[('readonly', '#ffffff')],
+                  selectforeground=[('readonly', '#011528')])
+
         selected_user = tk.StringVar()
-        combo = tk.Combobox(sel_frame, textvariable=selected_user, values=display_list, state="readonly", font=("Segoe UI", 12), width=40)
-        combo.pack(pady=5, ipady=3)
-        if display_list:
-            combo.current(0)
-            
-        qr_frame = tk.Frame(manager, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc", width=250, height=250)
-        qr_frame.pack(pady=10)
+        combo = ttk.Combobox(sel_frame, textvariable=selected_user, values=display_list, state="readonly", font=("Segoe UI", 12), width=35, style='Modern.TCombobox')
+        combo.pack(pady=5, ipady=4)
+        # ------------------------------------
+
+        # Soft, premium QR code container
+        qr_frame = tk.Frame(manager, bg="#f9f9f9", highlightthickness=1, highlightbackground="#e0e0e0", width=280, height=280)
+        qr_frame.pack(pady=(15, 10))
         qr_frame.pack_propagate(False)
-        
-        qr_label = tk.Label(qr_frame, bg="#ffffff")
+
+        qr_label = tk.Label(qr_frame, bg="#f9f9f9")
         qr_label.pack(expand=True)
-        
-        qr_text = tk.Label(manager, text="Select an employee and click Generate", bg="#ffffff", font=("Segoe UI", 10, "italic"), fg="#555")
+
+        qr_text = tk.Label(manager, text="", bg="#ffffff", font=("Segoe UI", 12, "bold"), fg="#217346")
         qr_text.pack(pady=5)
-        
-        def generate_qr():
+
+        def generate_qr(event=None):
             selection = selected_user.get()
             if not selection: return
             badge_id = selection.split("(")[-1].replace(")", "").strip()
+            
             qr = qrcode.QRCode(box_size=8, border=2)
             qr.add_data(f"ID: {badge_id}")
             qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-            img = img.resize((230, 230), Image.Resampling.LANCZOS)
+            
+            # Match the QR code to your app's Dark Blue theme!
+            img = qr.make_image(fill_color="#011528", back_color="#f9f9f9") 
+            img = img.resize((260, 260), Image.Resampling.LANCZOS)
+            
             tk_img = ImageTk.PhotoImage(img)
             qr_label.config(image=tk_img)
             qr_label.image = tk_img 
-            qr_text.config(text=f"Scan to login as: {selection.split('(')[0].strip()}", font=("Segoe UI", 12, "bold"), fg="#217346")
+            qr_text.config(text=f"Scan to login as: {selection.split('(')[0].strip()}")
+            
+            # 3. Instantly drops focus to kill the dotted outline!
+            manager.focus_set()
 
-        tk.Button(sel_frame, text="Generate Login QR", command=generate_qr, bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(pady=10)
+        # Bind the dropdown selection so it auto-generates on click
+        combo.bind("<<ComboboxSelected>>", generate_qr)
 
+        # Pre-load the first user so the box isn't empty when the window opens
+        if display_list:
+            combo.current(0)
+            generate_qr()
+            
     def open_waiting_for_removal(self):
         active_users = []
         if self.scanner_mgr:

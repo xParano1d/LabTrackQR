@@ -128,6 +128,29 @@ class CsvStorage:
             self._log_to_history("SYSTEM: REGISTRATION", f"ID:{badge_id}", full_name, f"AD: {ad_username}", "SYSTEM")
         self._trigger_immediate_sync()
 
+    def delete_employee(self, badge_id):
+        """Permanently removes an employee from the master JSON file."""
+        with self.lock:
+            try:
+                if os.path.exists(self.employees_file):
+                    with open(self.employees_file, 'r', encoding='utf-8') as f: 
+                        emps = json.load(f)
+                    
+                    if badge_id in emps:
+                        deleted_name = emps[badge_id].get("full_name", "Unknown")
+                        del emps[badge_id]
+                        
+                        with open(self.employees_file, 'w', encoding='utf-8') as f: 
+                            json.dump(emps, f, indent=4)
+                            
+                        # Log the administrative deletion to the permanent history
+                        self._log_to_history("SYSTEM: DELETION", f"ID:{badge_id}", deleted_name, "Employee profile manually deleted", "SERVER ADMIN")
+                        self._trigger_immediate_sync()
+                        return True
+            except Exception: 
+                pass
+            return False
+
     # --- INVENTORY CSV MANAGEMENT (Same as before) ---
     def sample_exists(self, sample_id):
         with self.lock:

@@ -7,10 +7,10 @@ import sys
 import os
 import winreg
 import time
-from PIL import Image
 import json
+import ctypes
+from PIL import Image
 from tkinter import filedialog, messagebox
-
 from config import NETWORK_SYNC_PATH, SYNC_INTERVAL_SECONDS
 from local_storage import CsvStorage
 from overlay import NotificationManager
@@ -87,7 +87,7 @@ def setup_tray(root, api_server):
     menu = pystray.Menu(
         pystray.MenuItem("View Logs History", trigger_log_viewer), 
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Manage Employee Badges", trigger_user_manager),
+        pystray.MenuItem("Employees Management", trigger_user_manager),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Run on Windows Startup", toggle_autostart, checked=lambda item: state['autostart']),
         pystray.MenuItem("Quit Server", on_quit)
@@ -184,6 +184,21 @@ def get_master_directory():
     return get_master_directory()
 
 if __name__ == "__main__":
+    # Unique lock name for the SERVER
+    mutex_name = "Global\\LabTrackQR_Server_Instance_Lock"
+    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
+    
+    # 183 is the Windows Error Code for ERROR_ALREADY_EXISTS
+    if ctypes.windll.kernel32.GetLastError() == 183: 
+        err_root = tk.Tk()
+        err_root.withdraw()
+        err_root.attributes("-topmost", True) 
+        messagebox.showwarning(
+            "LabTrack Server Already Running", 
+            "The LabTrack Server is already running in the background!\n\nPlease check your system tray (near the clock) to access it."
+        )
+        sys.exit(0) # Instantly kill this duplicate instance
+
     # 1. Ensure configuration exists
     parent_folder = get_master_directory()
     

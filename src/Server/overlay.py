@@ -4,6 +4,7 @@ import sys
 import os
 import ctypes
 from PIL import Image, ImageTk
+from tkinter import ttk, messagebox
 from logviewer import LogViewerWindow # Uses the shared engine!
 
 try:
@@ -78,12 +79,14 @@ class NotificationManager:
         while not self.message_queue.empty():
             msg = self.message_queue.get()
             
-            # Server only needs to open the log viewer dashboard
             if msg == "COMMAND:OPEN_LOG_VIEWER":
                 self.open_log_viewer()
                 continue
                 
-            # Ignore client-specific GUI commands
+            if msg == "COMMAND:OPEN_USER_MANAGER":
+                self.open_user_manager()
+                continue
+                
             if isinstance(msg, str) and msg.startswith("COMMAND:"):
                 continue
 
@@ -105,6 +108,175 @@ class NotificationManager:
         # Summons the shared LogViewerWindow and passes True for is_server
         viewer_instance = LogViewerWindow(self.root, self.storage, self.spawn_notification, is_server=True)
         self.active_log_windows.append(viewer_instance)
+
+    def open_user_manager(self):
+        if hasattr(self, 'user_mgr_win') and self.user_mgr_win and self.user_mgr_win.winfo_exists():
+            self.user_mgr_win.lift()
+            return
+
+        win = tk.Toplevel(self.root)
+        self.user_mgr_win = win
+        win.title("User Management Dashboard")
+        win.geometry("780x520")
+        win.configure(bg="#f4f4f4")
+        
+        # Background memory to track if we are fixing a typo in an existing ID
+        win.current_editing_badge = None 
+        
+        try:
+            hwnd = ctypes.windll.user32.GetParent(win.winfo_id())
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(ctypes.c_int(2)), 4)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(ctypes.c_int(0x00281501)), 4)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(ctypes.c_int(0x00FFFFFF)), 4)
+        except Exception: pass
+
+        left_frame = tk.Frame(win, bg="#f4f4f4")
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        right_frame = tk.Frame(win, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc", width=300)
+        right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+
+        tk.Label(left_frame, text="Registered Employees", bg="#f4f4f4", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0,5))
+
+        # 1. The Dynamic Employee List
+        columns = ("Badge ID", "Full Name", "AD Login")
+        tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=15)
+        
+        # --- THE FIX: Clickable Sorting Headers! ---
+        def sort_column(col, reverse):
+            data_list = [(tree.set(child, col), child) for child in tree.get_children('')]
+            data_list.sort(reverse=reverse, key=lambda x: x[0].lower())
+            for index, (val, child) in enumerate(data_list):
+                tree.move(child, '', index)
+            # Switch the arrow direction for the next click
+            tree.heading(col, command=lambda: sort_column(col, not reverse))
+
+        for col in columns: 
+            tree.heading(col, text=col, command=lambda c=col: sort_column(c, False))
+        # -------------------------------------------
+
+        tree.column("Badge ID", width=90, anchor=tk.CENTER)
+        tree.column("Full Name", width=180, anchor=tk.W)
+        tree.column("AD Login", width=120, anchor=tk.W)
+        tree.pack(fill=tk.BOTH, expand=True)
+
+        # 2. The Form Fields
+        tk.Label(right_frame, text="Employee Details", bg="#ffffff", font=("Segoe UI", 14, "bold"), fg="#011528").pack(pady=(15, 0))
+        
+        # --- NEW: Dynamic Mode Indicator ---
+        mode_label = tk.Label(right_frame, text="Creating New User", bg="#ffffff", fg="#217346", font=("Segoe UI", 9, "bold italic"))
+        mode_label.pack(pady=(0, 15))
+
+        tk.Label(right_frame, text="Badge ID (8 Digits):", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
+        entry_badge = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
+        entry_badge.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
+
+        tk.Label(right_frame, text="First Name:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
+        entry_first = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
+        entry_first.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
+
+        tk.Label(right_frame, text="Last Name:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
+        entry_last = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
+        entry_last.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
+
+        tk.Label(right_frame, text="Windows AD Login:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
+        entry_ad = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
+        entry_ad.pack(fill=tk.X, padx=15, pady=(2, 20), ipady=3)
+
+        # --- LOGIC & EVENTS ---
+        def load_data():
+            tree.delete(*tree.get_children())
+            emps = self.storage.get_employees() if self.storage else {}
+            for b_id, data in emps.items():
+                if isinstance(data, dict):
+                    tree.insert("", tk.END, text=str(b_id), values=(str(b_id), data.get("full_name", ""), data.get("ad_username", "")))
+
+        def on_select(event):
+            selected = tree.selection()
+            if not selected: return
+            
+            b_id = str(tree.item(selected[0], "text"))
+            emps = self.storage.get_employees()
+            if b_id in emps:
+                data = emps[b_id]
+                
+                # Remember who we are editing!
+                win.current_editing_badge = b_id 
+                mode_label.config(text="Editing Existing User", fg="#f39c12")
+                
+                # Now the badge ID is fully editable to fix typos!
+                entry_badge.delete(0, tk.END)
+                entry_badge.insert(0, b_id)
+
+                entry_first.delete(0, tk.END)
+                entry_first.insert(0, data.get("first_name", ""))
+                entry_last.delete(0, tk.END)
+                entry_last.insert(0, data.get("last_name", ""))
+                entry_ad.delete(0, tk.END)
+                entry_ad.insert(0, data.get("ad_username", ""))
+
+        tree.bind("<<TreeviewSelect>>", on_select)
+
+        def prepare_new_user():
+            win.current_editing_badge = None
+            mode_label.config(text="Creating New User", fg="#217346")
+            
+            entry_badge.delete(0, tk.END)
+            entry_first.delete(0, tk.END)
+            entry_last.delete(0, tk.END)
+            entry_ad.delete(0, tk.END)
+            for sel in tree.selection(): tree.selection_remove(sel)
+
+        def save_user():
+            b_id = entry_badge.get().strip()
+            f_name = entry_first.get().strip()
+            l_name = entry_last.get().strip()
+            ad_user = entry_ad.get().strip()
+
+            if len(b_id) != 8 or not b_id.isdigit():
+                messagebox.showerror("Error", "Badge ID must be exactly 8 numbers.", parent=win)
+                return
+            if not f_name or not l_name:
+                messagebox.showerror("Error", "First and Last name are required.", parent=win)
+                return
+
+            if self.storage:
+                # --- THE FIX: Delete the old profile if they fixed a typo in the Badge ID ---
+                old_b_id = win.current_editing_badge
+                if old_b_id and old_b_id != b_id:
+                    self.storage.delete_employee(old_b_id)
+                # ----------------------------------------------------------------------------
+                
+                self.storage.add_employee(b_id, f_name, l_name, ad_user)
+                self.spawn_notification(f"Saved Successfully:\n{f_name} {l_name}")
+                load_data()
+                prepare_new_user()
+
+        def delete_user():
+            # Protect against empty deletions
+            b_id = win.current_editing_badge or entry_badge.get().strip()
+            if not b_id: return
+            
+            # Safely fetch the user's real name directly from the database
+            emps = self.storage.get_employees() if self.storage else {}
+            full_name = emps.get(b_id, {}).get("full_name", "Unknown User")
+            
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to permanently delete {full_name} (ID:{b_id})?", parent=win):
+                if self.storage:
+                    self.storage.delete_employee(b_id)
+                    self.spawn_notification(f"User Deleted:\n{full_name}")
+                    load_data()
+                    prepare_new_user()
+
+        # 3. Action Buttons
+        btn_frame = tk.Frame(right_frame, bg="#ffffff")
+        btn_frame.pack(fill=tk.X, padx=15, pady=5)
+
+        tk.Button(btn_frame, text="Save / Update", command=save_user, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(fill=tk.X, pady=3)
+        tk.Button(btn_frame, text="New User", command=prepare_new_user, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(fill=tk.X, pady=3)
+        tk.Button(btn_frame, text="Delete User", command=delete_user, bg="#d9534f", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(fill=tk.X, pady=(25, 0))
+
+        load_data()
 
     def spawn_notification(self, text):
         window = tk.Toplevel(self.root)

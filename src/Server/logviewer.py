@@ -162,7 +162,7 @@ class LogViewerWindow:
             s_img = Image.open(resource_path("search.png")).resize((22, 22), Image.Resampling.LANCZOS)
             self.icon_search = ImageTk.PhotoImage(s_img)
             
-            c_img = Image.open(resource_path("backspace.png")).resize((22, 22), Image.Resampling.LANCZOS)
+            c_img = Image.open(resource_path("delete.png")).resize((22, 22), Image.Resampling.LANCZOS)
             self.icon_clear = ImageTk.PhotoImage(c_img)
             
             # Create buttons using the images instead of text
