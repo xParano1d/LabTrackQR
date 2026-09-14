@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 import os
 import sys
+import time
 import ctypes
 import threading
 import requests
@@ -52,22 +53,19 @@ class LogViewerWindow:
         self.current_sort_col = "Date/Day"
         self.current_sort_reverse = True
         
-        self._build_ui()
+        self.active_filters = set()
+        self._pending_initial_filters = initial_filters or []
         
-        if initial_filters:
-            for f in initial_filters:
-                if f in self.tag_widgets:
-                    self.active_filters.add(f)
-                    self.tag_widgets[f].config(bg="#011528", fg="white")
-                    
-        if initial_search:
-            self.search_var.set(initial_search)
+        
+        self._build_ui()
             
         self.execute_search()
         self.auto_refresh()
 
     def switch_view(self, source, year=None, month=None):
         """Cleans up the UI (wipes search and buttons) before changing tabs."""
+        if hasattr(self, 'force_close_menu'): self.force_close_menu()
+
         self.search_var.set("")
         if hasattr(self, 'active_filters'):
             self.active_filters.clear()
@@ -121,6 +119,11 @@ class LogViewerWindow:
         return []
 
     def fetch_view_data(self, source, year=None, month=None, sort_col="Date/Day", reverse=True):
+        if getattr(self.storage, 'is_offline_mode', False):
+            if source == 'inventory':
+                return self.storage.get_inventory_data()
+            return [] # Cannot view history archives while offline
+
         try:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
             url = f"{target_url}/api/view_data"
@@ -128,117 +131,185 @@ class LogViewerWindow:
                 "source": source, "year": year or "", "month": month or "",
                 "sort_col": sort_col, "reverse": str(reverse).lower()
             }
-            resp = requests.get(url, params=params, timeout=10)
+
+            resp = requests.get(url, params=params, timeout=3)
             if resp.status_code == 200:
                 return resp.json().get("results", [])
         except Exception:
             pass
+            
+        if source == 'inventory' and getattr(self, 'storage', None):
+            return self.storage.get_inventory_data()
+            
         return []
 
     def _build_ui(self):
-        top_frame = tk.Frame(self.viewer, bg="#f4f4f4")
-        top_frame.pack(fill=tk.X, pady=10, padx=10)
-        btn_frame = tk.Frame(top_frame, bg="#f4f4f4")
-        btn_frame.pack(side=tk.LEFT)
-        search_container = tk.Frame(top_frame, bg="#f4f4f4")
-        search_container.pack(side=tk.RIGHT)
-        search_frame = tk.Frame(search_container, bg="#f4f4f4")
+        self.viewer.minsize(700, 450)
+        self.is_collapsed = False
+        self.menu_is_open = False
+        self.full_nav_width = 600 
+        
+        # --- THE HOVER ENGINE ---
+        def apply_hover(widget, default_bg, hover_bg):
+            widget.bind("<Enter>", lambda e, w=widget, c=hover_bg: w.config(bg=c))
+            widget.bind("<Leave>", lambda e, w=widget, c=default_bg: w.config(bg=c))
+
+        self.top_frame = tk.Frame(self.viewer, bg="#f4f4f4")
+        self.top_frame.pack(fill=tk.X, pady=10, padx=10)
+        
+        try:
+            m_img = Image.open(resource_path("menu.png")).resize((24, 24), Image.Resampling.LANCZOS)
+            self.icon_menu = ImageTk.PhotoImage(m_img)
+            mc_img = Image.open(resource_path("menuClose.png")).resize((24, 24), Image.Resampling.LANCZOS)
+            self.icon_menu_close = ImageTk.PhotoImage(mc_img)
+        except Exception:
+            self.icon_menu = None
+            self.icon_menu_close = None
+
+        self.hamburger_btn = tk.Button(
+            self.top_frame, image=self.icon_menu, text="☰" if not self.icon_menu else "",
+            command=self.toggle_hamburger_menu, bg="#011528", fg="white", 
+            font=("Segoe UI", 14), relief="flat", cursor="hand2", padx=10
+        )
+        apply_hover(self.hamburger_btn, "#011528", "#022a52") # Hover for Hamburger
+        
+        self.collapsed_title = tk.Label(self.top_frame, text="System Logs & Inventory", bg="#f4f4f4", fg="#011528", font=("Segoe UI", 14, "bold"))
+        self.btn_frame = tk.Frame(self.top_frame, bg="#f4f4f4")
+        self.btn_frame.pack(side=tk.LEFT)
+
+        self.search_container = tk.Frame(self.top_frame, bg="#f4f4f4")
+        self.search_container.pack(side=tk.RIGHT)
+        search_frame = tk.Frame(self.search_container, bg="#f4f4f4")
         search_frame.pack(side=tk.TOP, anchor="e", padx=(0,3))
 
-        # --- UI: ENTER-TO-SEARCH BAR ---
         self.search_var = tk.StringVar()
         tk.Label(search_frame, text="Search:", bg="#f4f4f4", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=5)
-        
-        search_entry = tk.Entry(search_frame, textvariable=self.search_var, font=("Segoe UI", 10), width=24, relief="solid", bd=1)
-        search_entry.pack(side=tk.LEFT, ipady=3)
-        search_entry.bind("<Return>", self.trigger_manual_search)
+
+        self.search_entry = tk.Entry(search_frame, textvariable=self.search_var, font=("Segoe UI", 10), width=24, relief="solid", bd=1)
+        self.search_entry.pack(side=tk.LEFT, ipady=3)
+        self.search_entry.bind("<Return>", self.trigger_manual_search)
 
         def clear_search():
             self.search_var.set("")
             self.trigger_manual_search()
 
-        # Load PNG Icons and attach them to 'self' to prevent memory deletion
         try:
             s_img = Image.open(resource_path("search.png")).resize((22, 22), Image.Resampling.LANCZOS)
             self.icon_search = ImageTk.PhotoImage(s_img)
-            
             c_img = Image.open(resource_path("delete.png")).resize((22, 22), Image.Resampling.LANCZOS)
             self.icon_clear = ImageTk.PhotoImage(c_img)
-            
-            # Create buttons using the images instead of text
             search_btn = tk.Button(search_frame, image=self.icon_search, command=self.trigger_manual_search, bg="#011528", activebackground="#022a52", relief="flat", cursor="hand2", bd=0, padx=6, pady=2)
             clear_btn = tk.Button(search_frame, image=self.icon_clear, command=clear_search, bg="#d9534f", activebackground="#c9302c", relief="flat", cursor="hand2", bd=0, padx=6, pady=2)
-            
         except Exception:
-            # Safe Fallback to text if the image files are missing
             search_btn = tk.Button(search_frame, text="🔍", command=self.execute_search, bg="#011528", fg="white", font=("Segoe UI", 9), relief="flat", cursor="hand2", width=4 )
             clear_btn = tk.Button(search_frame, text="⌫", command=clear_search, bg="#d9534f", fg="white", font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2", width=3, round=2)
 
         search_btn.pack(side=tk.LEFT, padx=(2, 2), ipady=2)
         clear_btn.pack(side=tk.LEFT, padx=(0, 0), ipady=2)
+        
+        apply_hover(search_btn, "#011528", "#022a52") # Hover for Search
+        apply_hover(clear_btn, "#d9534f", "#c9302c")  # Hover for Clear
 
-        # --- UI: QUICK TAGS ---
-        tags_frame = tk.Frame(search_container, bg="#f4f4f4")
+        tags_frame = tk.Frame(self.search_container, bg="#f4f4f4")
         tags_frame.pack(side=tk.TOP, anchor="e", pady=(2, 0))
 
-        self.active_filters = set() # Stores the hidden search terms
-        self.tag_widgets = {}       # Stores the buttons to change their colors    
-
-        # Hide "My Samples" on the Server
+        self.tag_widgets = {}
         quick_tags = []
-        if not self.is_server:
-            quick_tags.append(("My Samples", "ME"))
-            
-        quick_tags.extend([
-            ("Today", "today"),
-            ("Old", "old"),
-            ("Pending", "pending-storage"), 
-            ("Removed", "removed")
-        ])
+        if not self.is_server: quick_tags.append(("My Samples", "ME"))
+        quick_tags.extend([("Today", "today"), ("Old", "old"), ("Pending", "pending-storage"), ("Removed", "removed")])
 
         def toggle_tag(keyword, lbl_widget):
-            # 1. Resolve dynamic targets
-            if keyword == "ME":
-                target = self.current_user if self.current_user else ""
-            elif keyword == "today":
-                target = datetime.now().strftime("%Y-%m-%d")
-            else:
-                target = keyword
+            if keyword == "ME": target = self.current_user if self.current_user else ""
+            elif keyword == "today": target = datetime.now().strftime("%Y-%m-%d")
+            else: target = keyword
                 
             if not target: return
+            if keyword in ["ME", "old", "pending-storage", "today"]: self.current_tab[0] = 'inventory'
 
-            # 2. Force inventory view for operational tags
-            if keyword in ["ME", "old", "pending-storage", "today"]:
-                self.current_tab[0] = 'inventory'
-
-            # 3. Toggle the hidden state and update the button color!
+            was_active = False
             if target in self.active_filters:
                 self.active_filters.remove(target)
-                lbl_widget.config(bg="#e8e8e8", fg="#333333") # Inactive state (Grey)
+                was_active = True
+            if keyword in self.active_filters:
+                self.active_filters.remove(keyword)
+                was_active = True
+
+            if was_active:
+                lbl_widget.config(bg="#e8e8e8", fg="#333333") 
             else:
                 self.active_filters.add(target)
-                lbl_widget.config(bg="#011528", fg="white") # Active state (Dark Blue)
-
+                lbl_widget.config(bg="#011528", fg="white") 
             self.execute_search()
 
         for display_text, actual_keyword in quick_tags:
             lbl = tk.Label(tags_frame, text=display_text, bg="#e8e8e8", fg="#333333", font=("Segoe UI", 8, "bold"), padx=5, pady=2, cursor="hand2")
             lbl.pack(side=tk.LEFT, padx=3)
-            
-            # Bind the click event, passing the label widget itself so we can color it
             lbl.bind("<Button-1>", lambda e, k=actual_keyword, w=lbl: toggle_tag(k, w))
-            
-            # Smart hover effects (only change color if it isn't currently active)
             def on_enter(e, w=lbl):
                 if w.cget("bg") == "#e8e8e8": w.config(bg="#d0d0d0")
             def on_leave(e, w=lbl):
                 if w.cget("bg") == "#d0d0d0": w.config(bg="#e8e8e8")
-                
             lbl.bind("<Enter>", on_enter)
             lbl.bind("<Leave>", on_leave)
-            
             self.tag_widgets[actual_keyword] = lbl
+            
+        if hasattr(self, '_pending_initial_filters'):
+            for kw in self._pending_initial_filters:
+                if kw in self.tag_widgets:
+                    toggle_tag(kw, self.tag_widgets[kw])
+            self._pending_initial_filters = []
 
+        # --- DUAL BUTTON STRATEGY ---
+        now = datetime.now()
+        
+        # Group 1: Standard Horizontal Buttons
+        self.b1 = tk.Button(self.btn_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20)
+        self.b2 = tk.Button(self.btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), bg="#445566", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20)
+        
+        self.history_btn = tk.Menubutton(self.btn_frame, text="Archive", bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12, activebackground="#777777", activeforeground="white", cursor="hand2")
+        self.main_menu = tk.Menu(self.history_btn, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
+        self.history_btn.config(menu=self.main_menu)
+        self.main_menu.add_command(label="Loading archives...", state="disabled") 
+        threading.Thread(target=self._build_archive_menu_async, daemon=True).start()
+
+        self.b4 = tk.Button(self.btn_frame, text="Open in External Editor", command=self.open_external_file, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22)
+        
+        apply_hover(self.b1, "#011528", "#022a52")
+        apply_hover(self.b2, "#445566", "#5d6d7e")
+        apply_hover(self.history_btn, "#555555", "#777777")
+        apply_hover(self.b4, "#217346", "#2a8f57")
+
+        self.b1.pack(side=tk.LEFT, padx=5)
+        self.b2.pack(side=tk.LEFT, padx=5)
+        self.history_btn.pack(side=tk.LEFT, padx=5)
+        self.b4.pack(side=tk.LEFT, padx=5)
+        
+        # Group 2: The Vertical Dropdown Frame
+        self.dropdown_frame = tk.Frame(self.viewer, bg="#ffffff", highlightthickness=2, highlightbackground="#cccccc")
+        
+        self.d1 = tk.Button(self.dropdown_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat")
+        self.d2 = tk.Button(self.dropdown_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), bg="#445566", fg="white", font=("Segoe UI", 10, "bold"), relief="flat")
+        
+        self.drop_history_btn = tk.Button(self.dropdown_frame, text="Archive", bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", activebackground="#777777", activeforeground="white", cursor="hand2")
+        
+        def popup_archive_menu(event):
+            self.main_menu.post(event.widget.winfo_rootx() + 150, event.widget.winfo_rooty())
+            
+        self.drop_history_btn.bind("<ButtonRelease-1>", popup_archive_menu)
+        
+        self.d4 = tk.Button(self.dropdown_frame, text="Open in External Editor", command=lambda: [self.force_close_menu(), self.open_external_file()], bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat")
+
+        apply_hover(self.d1, "#011528", "#022a52")
+        apply_hover(self.d2, "#445566", "#5d6d7e")
+        apply_hover(self.drop_history_btn, "#555555", "#777777")
+        apply_hover(self.d4, "#217346", "#2a8f57")
+
+        self.d1.pack(fill=tk.X, padx=10, pady=(10, 5), ipady=3)
+        self.d2.pack(fill=tk.X, padx=10, pady=5, ipady=3)
+        self.drop_history_btn.pack(fill=tk.X, padx=10, pady=5, ipady=3)
+        self.d4.pack(fill=tk.X, padx=10, pady=(5, 10), ipady=3)
+
+        # --- DATA TABLE ---
         columns = ("Date/Day", "Time", "Location", "Sample ID", "Name", "Notes", "User")
         self.tree = ttk.Treeview(self.viewer, columns=columns, show="headings", height=15)
         for col in columns: self.tree.heading(col, text=col)
@@ -261,23 +332,89 @@ class LogViewerWindow:
         self.tree.tag_configure('system', foreground="#10B981")  
         self.tree.tag_configure('overdue', foreground='#8B5CF6')
 
+        # --- GLOBAL KEYBINDS ---
+        self.last_refresh_time = 0
+
+        def focus_search_bar(event):
+            self.search_entry.focus_set()
+            self.search_entry.selection_range(0, tk.END) # Highlights existing text for quick typing
+            return "break" # Stops the OS from doing a default Ctrl+F action
+
+        def handle_escape(event):
+            self.search_var.set("")
+            self.trigger_manual_search()
+            self.viewer.focus_set() # Removes the blinking cursor from the search box
+            return "break"
+
+        def handle_f5(event):
+            current_time = time.time()
+            if current_time - self.last_refresh_time > 1.0: # 1-second cooldown
+                self.last_refresh_time = current_time
+                self.execute_search()
+            return "break"
+
+        def handle_new_window(event):
+            # Asks the main tray application to safely spawn a new viewer
+            if self.notify:
+                self.notify("OPEN_NEW_VIEWER") 
+            return "break"
+
+        self.viewer.bind("<Control-f>", focus_search_bar)
+        self.viewer.bind("<Control-F>", focus_search_bar)
+        self.viewer.bind("<Escape>", handle_escape)
+        self.viewer.bind("<F5>", handle_f5)
+        self.viewer.bind("<Control-n>", handle_new_window)
+        self.viewer.bind("<Control-N>", handle_new_window)
+
         tk.Label(self.viewer, text="Tip: Select a row and press Ctrl+C to copy data", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
+        self.viewer.bind("<Configure>", self.handle_window_resize)
 
-        now = datetime.now()
+    def handle_window_resize(self, event):
+        """Monitors the window width and hides/shows the horizontal buttons."""
+        if event.widget == self.viewer:
+            search_width = self.search_container.winfo_reqwidth()
+            
+            if not self.is_collapsed:
+                self.full_nav_width = self.btn_frame.winfo_reqwidth()
+                
+                if event.width < (self.full_nav_width + search_width + 30):
+                    self.is_collapsed = True
+                    self.btn_frame.pack_forget() 
+                    self.hamburger_btn.pack(side=tk.LEFT, padx=5) 
+                    self.collapsed_title.pack(side=tk.LEFT, padx=15) 
+            else:
+                if event.width > (self.full_nav_width + search_width + 30):
+                    self.is_collapsed = False
+                    self.hamburger_btn.pack_forget() 
+                    self.collapsed_title.pack_forget()
+                    
+                    if self.menu_is_open:
+                        self.toggle_hamburger_menu() 
+                        
+                    self.btn_frame.pack(side=tk.LEFT) 
 
-        tk.Button(btn_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), bg="#445566", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20).pack(side=tk.LEFT, padx=5)
+    def toggle_hamburger_menu(self):
+        """Places the pre-built dropdown container safely over the data table."""
+        if self.menu_is_open:
+            self.dropdown_frame.place_forget()
+            if self.icon_menu: self.hamburger_btn.config(image=self.icon_menu, text="")
+            else: self.hamburger_btn.config(text="☰")
+            self.menu_is_open = False
+        else:
+            x_pos = 15
+            y_pos = self.top_frame.winfo_y() + self.top_frame.winfo_height()
+            
+            self.dropdown_frame.place(x=x_pos, y=y_pos, width=260)
+            self.dropdown_frame.lift() 
+            
+            if self.icon_menu_close: self.hamburger_btn.config(image=self.icon_menu_close, text="")
+            else: self.hamburger_btn.config(text="✕")
+            self.menu_is_open = True
 
-        self.history_btn = tk.Menubutton(btn_frame, text="Archive", bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12, activebackground="#777777", activeforeground="white", cursor="hand2")
-        self.history_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.main_menu = tk.Menu(self.history_btn, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
-        self.history_btn.config(menu=self.main_menu)
-        self.main_menu.add_command(label="Loading archives...", state="disabled") 
-        
-        threading.Thread(target=self._build_archive_menu_async, daemon=True).start()
-
-        tk.Button(btn_frame, text="Open in External Editor", command=self.open_external_file, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22).pack(side=tk.LEFT, padx=5)
+    def force_close_menu(self):
+        """Helper to ensure the menu auto-closes when an option is clicked."""
+        if self.menu_is_open:
+            self.toggle_hamburger_menu()
 
     def _build_archive_menu_async(self):
         available_history = self.fetch_archive_months() 
@@ -489,7 +626,7 @@ class LogViewerWindow:
                 try: self.tree.selection_add(inserted)
                 except Exception: pass
 
-        self._update_sort_headers(self.current_sort_col, self.current_sort_reverse)
+        self.treeview_sort_column(self.current_sort_col, self.current_sort_reverse)
 
     def auto_refresh(self):
         if self.viewer.winfo_exists():

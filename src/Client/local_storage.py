@@ -42,7 +42,6 @@ class ApiStorage:
                 try:
                     with open(self.queue_file, 'r') as f: queue = json.load(f)
                 except json.JSONDecodeError:
-                    # --- THE FIX: Rescue corrupted queues ---
                     import shutil
                     # Back up the corrupted file so you can manually extract the text later
                     shutil.copy(self.queue_file, self.queue_file + ".corrupted_backup")
@@ -154,6 +153,7 @@ class ApiStorage:
 
     # --- QUEUE DATA WRITERS ---
     def save_data_async(self, location_id, sample_id, user, message_queue, sample_name="N/A", desc_notes="N/A", force_create=False):
+        location_id = location_id.replace('LOC:', '').strip()
         payload = {
             "location_id": location_id, "sample_id": sample_id, "user": user,
             "sample_name": sample_name, "desc_notes": desc_notes, "force_create": force_create,
@@ -165,8 +165,7 @@ class ApiStorage:
             with open(self.queue_file, 'w') as f: json.dump(queue, f)
             
         if message_queue:
-            clean_loc = location_id.replace('LOC:', '').strip()
-            message_queue.put(f"Saved:\n{sample_id}\nLocation: {clean_loc}")
+            message_queue.put(f"Saved:\n{sample_id}\nLocation: {location_id}")
 
     def remove_data_async(self, sample_id, user, message_queue):
         payload = {"sample_id": sample_id, "user": user, "is_removal": True, "client_timestamp": datetime.now().isoformat()}

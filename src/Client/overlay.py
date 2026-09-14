@@ -170,8 +170,13 @@ class NotificationManager:
             self.spawn_notification("Window Limit Reached:\nMaximum of 2 log windows allowed.")
             return
 
-        # Summons the shared LogViewerWindow and passes False for is_server
-        viewer_instance = LogViewerWindow(self.root, self.storage, self.spawn_notification, is_server=False)
+        def viewer_router(msg):
+            if msg == "OPEN_NEW_VIEWER":
+                self.open_log_viewer()
+            else:
+                self.spawn_notification(msg)
+
+        viewer_instance = LogViewerWindow(self.root, self.storage, viewer_router, is_server=False)
         self.active_log_windows.append(viewer_instance)
 
     # --- ALL OTHER CLIENT FUNCTIONS REMAIN EXACTLY THE SAME ---
@@ -287,13 +292,11 @@ class NotificationManager:
             if len(b_id) == 8 and b_id.isdigit() and f_name and l_name:
                 full_name = f"{f_name} {l_name}"
                 
-                # --- THE FIX ---
                 if self.storage:
                     success = self.storage.add_employee(b_id, f_name, l_name, ad_username)
                     if not success:
                         self.spawn_notification("Registration Failed:\nCould not reach server.")
-                        return  # Stops the function and keeps the window open!
-                # ---------------
+                        return
 
                 if self.scanner_mgr:
                     for node in self.scanner_mgr.active_scanners.values():
@@ -492,7 +495,12 @@ class NotificationManager:
             for node in list(self.scanner_mgr.active_scanners.values()):
                 if node.user and node.user not in active_users:
                     active_users.append(node.user)
-        
+
+        # If no physical scanner is plugged in, but Windows AD recognized you, let you add a sample!
+        if not active_users and self.scanner_mgr and self.scanner_mgr.ad_fallback_name:
+            active_users.append(self.scanner_mgr.ad_fallback_name)
+
+        # If it's STILL empty (no scanner AND no AD), then deny access
         if not active_users:
             import winsound
             winsound.MessageBeep(winsound.MB_ICONHAND)

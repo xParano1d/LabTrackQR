@@ -179,8 +179,11 @@ def check_for_stale_samples(root_window, storage_manager, current_user_name, log
             
             def open_viewer():
                 popup.destroy()
-                # Opens LogViewer and automatically injects the search terms
-                logviewer_class(root_window, storage_manager, notify_func, is_server=False, current_user=current_user_name, initial_filters=["ME", "old"])
+                # FIXED: Checking for the correct method name!
+                if hasattr(app, 'open_log_viewer'):
+                    app.open_log_viewer()
+                else:
+                    LogViewerWindow(root_window, storage_manager, notify_func, is_server=False, current_user=current_user_name, initial_filters=["ME", "old"])
                 
             # Crisp red button to match the theme
             btn_frame = tk.Frame(popup, bg="#ffffff")
@@ -189,6 +192,20 @@ def check_for_stale_samples(root_window, storage_manager, current_user_name, log
 
         # Start the 15-minute stealth countdown (900,000 ms)
         root_window.after(5000, run_check)
+
+def notify_func(*args):
+    """Universal handler for cross-window actions like opening new viewers from keybinds."""
+    if not args: return
+    
+    action = args[0]
+    if action == "OPEN_NEW_VIEWER":
+        # FIXED: The correct method name is open_log_viewer!
+        if 'app' in globals() and hasattr(app, 'open_log_viewer'):
+            app.open_log_viewer()
+    else:
+        # FIXED: If it's a normal message (like Ctrl+C), pass it to the notification engine!
+        if 'app' in globals() and hasattr(app, 'spawn_notification'):
+            app.spawn_notification(action)
 
 if __name__ == "__main__":
     # --- 1. SINGLE INSTANCE LOCK (MUTEX) ---
@@ -235,6 +252,6 @@ if __name__ == "__main__":
 
     # Disable the stale check if we are offline (it relies on fresh server data)
     if scanner_mgr.ad_fallback_name and not storage.is_offline_mode:
-        check_for_stale_samples(root_window=app.root, storage_manager=storage, current_user_name=scanner_mgr.ad_fallback_name, logviewer_class=LogViewerWindow, notify_func=app.spawn_notification)
+        check_for_stale_samples(root_window=app.root, storage_manager=storage, current_user_name=scanner_mgr.ad_fallback_name, logviewer_class=LogViewerWindow, notify_func=lambda action: notify_func(action, app.root, storage, scanner_mgr.ad_fallback_name, LogViewerWindow))
 
     app.run()
