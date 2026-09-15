@@ -103,6 +103,13 @@ class NotificationManager:
             import winsound
             winsound.MessageBeep(winsound.MB_ICONHAND)
             self.spawn_notification("Window Limit Reached:\nMaximum of 2 log windows allowed.")
+
+            latest_viewer = self.active_log_windows[-1].viewer
+            latest_viewer.deiconify()
+            latest_viewer.lift()
+            latest_viewer.attributes('-topmost', True)
+            latest_viewer.after(100, lambda: latest_viewer.attributes('-topmost', False))
+            latest_viewer.focus_force()
             return
 
         # Summons the shared LogViewerWindow and passes True for is_server
@@ -111,7 +118,11 @@ class NotificationManager:
 
     def open_user_manager(self):
         if hasattr(self, 'user_mgr_win') and self.user_mgr_win and self.user_mgr_win.winfo_exists():
-            self.user_mgr_win.lift()
+            self.user_mgr_win.deiconify()               # 1. Un-minimize it if it's hidden
+            self.user_mgr_win.lift()                    # 2. Pull it up in the Tkinter stack
+            self.user_mgr_win.attributes('-topmost', True) # 3. Force Windows to put it over other apps
+            self.user_mgr_win.after(100, lambda: self.user_mgr_win.attributes('-topmost', False)) # 4. Drop the lock so it doesn't get stuck on top forever
+            self.user_mgr_win.focus_force()             # 5. Grab the keyboard cursor
             return
 
         win = tk.Toplevel(self.root)
@@ -167,9 +178,6 @@ class NotificationManager:
         mode_label = tk.Label(right_frame, text="Creating New User", bg="#ffffff", fg="#217346", font=("Segoe UI", 9, "bold italic"))
         mode_label.pack(pady=(0, 15))
 
-        tk.Label(right_frame, text="Badge ID (8 Digits):", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
-        entry_badge = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
-        entry_badge.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
 
         tk.Label(right_frame, text="First Name:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
         entry_first = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
@@ -178,6 +186,10 @@ class NotificationManager:
         tk.Label(right_frame, text="Last Name:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
         entry_last = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
         entry_last.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
+
+        tk.Label(right_frame, text="Badge ID (8 Digits):", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
+        entry_badge = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
+        entry_badge.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
 
         tk.Label(right_frame, text="Windows AD Login:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
         entry_ad = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)

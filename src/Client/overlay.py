@@ -162,12 +162,19 @@ class NotificationManager:
 
         self.root.after(50, self.check_queue)
 
-    def open_log_viewer(self):
+    def open_log_viewer(self, initial_filters=None):
         self.active_log_windows = [w for w in self.active_log_windows if w.viewer.winfo_exists()]
         if len(self.active_log_windows) >= 2:
             import winsound
             winsound.MessageBeep(winsound.MB_ICONHAND)
             self.spawn_notification("Window Limit Reached:\nMaximum of 2 log windows allowed.")
+
+            latest_viewer = self.active_log_windows[-1].viewer
+            latest_viewer.deiconify()
+            latest_viewer.lift()
+            latest_viewer.attributes('-topmost', True)
+            latest_viewer.after(100, lambda: latest_viewer.attributes('-topmost', False))
+            latest_viewer.focus_force()
             return
 
         def viewer_router(msg):
@@ -176,8 +183,70 @@ class NotificationManager:
             else:
                 self.spawn_notification(msg)
 
-        viewer_instance = LogViewerWindow(self.root, self.storage, viewer_router, is_server=False)
+        current_user = self.scanner_mgr.ad_fallback_name if self.scanner_mgr else ""
+        viewer_instance = LogViewerWindow(self.root, self.storage, viewer_router, is_server=False, current_user=current_user, initial_filters=initial_filters)
         self.active_log_windows.append(viewer_instance)
+
+    def start_stale_check(self, current_user_name):
+        """Silently checks for neglected samples and prompts the user to resolve them."""
+        from datetime import datetime
+        
+        def run_check():
+            try:
+                target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
+                response = requests.get(f"{target_url}/api/view_data", params={"source": "inventory"}, timeout=5)
+                
+                if response.status_code == 200:
+                    data = response.json().get("results", [])
+                    stale_count = 0
+                    now = datetime.now()
+                    
+                    for row in data:
+                        if len(row) >= 7 and row[6].lower() == current_user_name.lower() and "removed" not in row[2].lower() and "closed" not in row[2].lower():
+                            try:
+                                row_date = datetime.strptime(str(row[0]), "%Y-%m-%d")
+                                if (now - row_date).days >= 14:
+                                    stale_count += 1
+                            except Exception:
+                                pass
+                                
+                    if stale_count > 0:
+                        self.show_hard_stop_popup(stale_count, current_user_name)
+            except Exception:
+                pass # Silently fail if network is down
+                
+            # Re-run every 15 minutes (900,000 ms)
+            self.root.after(900000, run_check)
+
+        # Start initial check 5 seconds after call
+        self.root.after(5000, run_check)
+
+    def show_hard_stop_popup(self, count, current_user_name):
+        popup = tk.Toplevel(self.root)
+        popup.title("Attention Required")
+        popup.geometry("420x220") 
+        popup.overrideredirect(True) 
+        popup.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#d9534f") 
+        popup.attributes('-topmost', True) 
+        
+        popup.update_idletasks()
+        x = (popup.winfo_screenwidth() // 2) - (420 // 2)
+        y = (popup.winfo_screenheight() // 2) - (220 // 2)
+        popup.geometry(f'+{x}+{y}')
+        
+        popup.protocol("WM_DELETE_WINDOW", lambda: None)
+        
+        tk.Label(popup, text="⚠️ Action Required ⚠️", bg="#ffffff", fg="#d9534f", font=("Segoe UI", 16, "bold")).pack(pady=(25, 5))
+        tk.Label(popup, text=f"You currently have {count} samples left unattended\nin the system for over 14 days.", bg="#ffffff", fg="#333333", font=("Segoe UI", 11)).pack(pady=10)
+        
+        def open_viewer():
+            popup.destroy()
+            # Because it's now native to overlay.py, we can pass filters effortlessly!
+            self.open_log_viewer(initial_filters=["ME", "old"])
+            
+        btn_frame = tk.Frame(popup, bg="#ffffff")
+        btn_frame.pack(pady=(10, 0))
+        tk.Button(btn_frame, text="Show Samples", command=open_viewer, bg="#d9534f", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20, cursor="hand2").pack()
 
     # --- ALL OTHER CLIENT FUNCTIONS REMAIN EXACTLY THE SAME ---
     def open_relog_confirmation(self, new_user):
@@ -299,18 +368,21 @@ class NotificationManager:
                         return
 
                 if self.scanner_mgr:
+                    if ad_username: 
+                        self.scanner_mgr.ad_fallback_name = full_name
+                        
                     for node in self.scanner_mgr.active_scanners.values():
                         if node.user is None or ad_username:
                             node.user = full_name
                             if ad_username: node.ad_fallback_name = full_name
-                            self.message_queue.put(f"Login Successful:\nWelcome {full_name}!")
+                            
+                    self.message_queue.put(f"Login Successful:\nWelcome {full_name}!")
 
                 self.spawn_notification(f"Registered Successfully:\n{full_name}")
                 reg_win.destroy()
-            else:
-                if len(b_id) != 8: entry_badge.config(bg="#ffcccc")
-                if not f_name: entry_first.config(bg="#ffcccc")
-                if not l_name: entry_last.config(bg="#ffcccc")
+                
+                if ad_username:
+                    self.start_stale_check(full_name)
                 
         def cancel(): reg_win.destroy()
             
@@ -320,7 +392,15 @@ class NotificationManager:
         tk.Button(btn_frame, text="Assign & Save", command=save_badge, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=15).pack(side=tk.LEFT, padx=10)
 
     def open_employee_directory(self):
+        if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
+            self.emp_dir_win.deiconify()
+            self.emp_dir_win.lift()
+            self.emp_dir_win.focus_force()
+            return
+
         manager = tk.Toplevel(self.root)
+        self.emp_dir_win = manager  # Store the reference so we can find it next time!
+        
         manager.title("Employee Login Badges")
         manager.geometry("500x530")
         manager.overrideredirect(True)
@@ -568,7 +648,7 @@ class NotificationManager:
                 formatted_id = f"SMP:{id_raw}"
                 if self.storage:
                     self.storage.save_data_async(
-                        location_id="LOC: Pending-Storage", 
+                        location_id="LOC: Verification Queue", 
                         sample_id=formatted_id,
                         sample_name=name_val, 
                         desc_notes=notes_val, 

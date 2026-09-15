@@ -23,7 +23,7 @@ class CsvStorage:
 
     def _ensure_files_exist(self):
         if not os.path.exists(self.inventory_file):
-            with open(self.inventory_file, 'w', newline='', encoding='utf-8') as f:
+            with open(self.inventory_file, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f, delimiter=';')
                 writer.writerow(["Date", "Time", "Location", "Sample ID", "Name", "Notes", "User"])
         if not os.path.exists(self.history_dir):
@@ -78,9 +78,9 @@ class CsvStorage:
         row = [date_str, time_str, location, sample_id, name, notes, user]
         
         if not os.path.exists(history_file):
-            with open(history_file, 'w', newline='', encoding='utf-8') as f:
+            with open(history_file, 'w', newline='', encoding='utf-8-sig') as f:
                 csv.writer(f, delimiter=';').writerow(["Date", "Time", "Location", "Sample ID", "Name", "Notes", "User"])
-        with open(history_file, 'a', newline='', encoding='utf-8') as f:
+        with open(history_file, 'a', newline='', encoding='utf-8-sig') as f:
             csv.writer(f, delimiter=';').writerow(row)
 
     # --- UPGRADED EMPLOYEE JSON MANAGEMENT ---
@@ -216,7 +216,7 @@ class CsvStorage:
 
             if not found_existing: rows_to_keep.append([date_str, time_str, location_id, sample_id, sample_name, desc_notes, user])
 
-            with open(self.inventory_file, 'w', newline='', encoding='utf-8') as f:
+            with open(self.inventory_file, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f, delimiter=';')
                 writer.writerows(rows_to_keep)
                 
@@ -245,10 +245,10 @@ class CsvStorage:
                         if len(row) > 3 and row[3] == sample_id: sample_name = row[4] if len(row) > 4 else "Unknown Sample"
                         else: rows_to_keep.append(row)
                             
-                with open(self.inventory_file, 'w', newline='', encoding='utf-8') as f:
+                with open(self.inventory_file, 'w', newline='', encoding='utf-8-sig') as f:
                     writer = csv.writer(f, delimiter=';')
                     writer.writerows(rows_to_keep)
-                self._log_to_history("ACTION: REMOVED", sample_id, sample_name, "Sample permanently removed", user)
+                self._log_to_history("REQUEST CLOSED", sample_id, sample_name, "Sample permanently removed", user)
             except Exception: pass
         if message_queue: message_queue.put(f"Removed: {sample_id}\nBy: {user}")
         self._trigger_immediate_sync()

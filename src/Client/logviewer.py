@@ -215,7 +215,7 @@ class LogViewerWindow:
         self.tag_widgets = {}
         quick_tags = []
         if not self.is_server: quick_tags.append(("My Samples", "ME"))
-        quick_tags.extend([("Today", "today"), ("Old", "old"), ("Pending", "pending-storage"), ("Removed", "removed")])
+        quick_tags.extend([("Today", "today"), ("Old", "old"), ("Verification", "verification queue"), ("Closed", "request closed")])
 
         def toggle_tag(keyword, lbl_widget):
             if keyword == "ME": target = self.current_user if self.current_user else ""
@@ -223,7 +223,7 @@ class LogViewerWindow:
             else: target = keyword
                 
             if not target: return
-            if keyword in ["ME", "old", "pending-storage", "today"]: self.current_tab[0] = 'inventory'
+            if keyword in ["ME", "old", "verification queue", "today"]: self.current_tab[0] = 'inventory'
 
             was_active = False
             if target in self.active_filters:
@@ -366,7 +366,7 @@ class LogViewerWindow:
         self.viewer.bind("<Control-c>", self.copy_selection)
         self.viewer.bind("<Control-C>", self.copy_selection)
 
-        tk.Label(self.viewer, text="Select a row and press [Ctrl+C] to copy data  |  [Ctrl+F] for Searching  |  [Esc] Clears your Search Bar  |  [Ctrl+N] for New Window ", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
+        tk.Label(self.viewer, text="Select a row and press [Ctrl+C] to copy data  |  [Ctrl+F] for Searching  |  [Esc] Clears your Search Bar  |  [Ctrl+N] for New Window  |  F5 for Manual Refresh", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
         self.viewer.bind("<Configure>", self.handle_window_resize)
 
     def handle_window_resize(self, event):
@@ -539,8 +539,8 @@ class LogViewerWindow:
             loc_lower = clean_loc.lower()
             row_tags = ()
             
-            if 'removed' in loc_lower: row_tags = ('removed',)
-            elif 'pending' in loc_lower: row_tags = ('pending',)
+            if 'closed' in loc_lower or 'removed' in loc_lower: row_tags = ('removed',)
+            elif 'verification' in loc_lower or 'pending' in loc_lower: row_tags = ('pending',)
             elif 'system' in loc_lower: row_tags = ('system',)
                 
             self.tree.insert("", tk.END, text=item_id, values=display_row, tags=row_tags)
@@ -615,9 +615,9 @@ class LogViewerWindow:
             loc_lower = clean_loc.lower()
             row_tags = ()
             
-            if 'removed' in loc_lower: row_tags = ('removed',)
+            if 'closed' in loc_lower or 'removed' in loc_lower: row_tags = ('removed',)
             elif is_old: row_tags = ('overdue',)
-            elif 'pending' in loc_lower: row_tags = ('pending',)
+            elif 'verification' in loc_lower or 'pending' in loc_lower: row_tags = ('pending',)
             elif 'system' in loc_lower: row_tags = ('system',)
             
             inserted = self.tree.insert("", tk.END, text=item_id, values=display_row, tags=row_tags)

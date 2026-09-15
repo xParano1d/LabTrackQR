@@ -73,7 +73,6 @@ class LogViewerWindow:
             for lbl in self.tag_widgets.values():
                 lbl.config(bg="#e8e8e8", fg="#333333") # Reset to grey
                 
-        # --- THE FIX: Instantly change state so auto-refresh backs off ---
         self.current_tab[0] = source
         self.current_history_target[0] = year
         self.current_history_target[1] = month
@@ -216,7 +215,7 @@ class LogViewerWindow:
         self.tag_widgets = {}
         quick_tags = []
         if not self.is_server: quick_tags.append(("My Samples", "ME"))
-        quick_tags.extend([("Today", "today"), ("Old", "old"), ("Pending", "pending-storage"), ("Removed", "removed")])
+        quick_tags.extend([("Today", "today"), ("Old", "old"), ("Verification", "verification queue"), ("Closed", "request closed")])
 
         def toggle_tag(keyword, lbl_widget):
             if keyword == "ME": target = self.current_user if self.current_user else ""
@@ -224,7 +223,7 @@ class LogViewerWindow:
             else: target = keyword
                 
             if not target: return
-            if keyword in ["ME", "old", "pending-storage", "today"]: self.current_tab[0] = 'inventory'
+            if keyword in ["ME", "old", "verification queue", "today"]: self.current_tab[0] = 'inventory'
 
             was_active = False
             if target in self.active_filters:
@@ -325,7 +324,6 @@ class LogViewerWindow:
         self.tree.configure(yscroll=scrollbar.set)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        self.tree.bind("<Control-c>", self.copy_selection)
 
         self.tree.tag_configure('removed', foreground='#EF4444') 
         self.tree.tag_configure('pending', foreground='#06B6D4') 
@@ -365,8 +363,10 @@ class LogViewerWindow:
         self.viewer.bind("<F5>", handle_f5)
         self.viewer.bind("<Control-n>", handle_new_window)
         self.viewer.bind("<Control-N>", handle_new_window)
+        self.viewer.bind("<Control-c>", self.copy_selection)
+        self.viewer.bind("<Control-C>", self.copy_selection)
 
-        tk.Label(self.viewer, text="Tip: Select a row and press Ctrl+C to copy data", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
+        tk.Label(self.viewer, text="Select a row and press [Ctrl+C] to copy data  |  [Ctrl+F] for Searching  |  [Esc] Clears your Search Bar  |  [Ctrl+N] for New Window  |  F5 for Manual Refresh", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
         self.viewer.bind("<Configure>", self.handle_window_resize)
 
     def handle_window_resize(self, event):
@@ -539,14 +539,13 @@ class LogViewerWindow:
             loc_lower = clean_loc.lower()
             row_tags = ()
             
-            if 'removed' in loc_lower: row_tags = ('removed',)
-            elif 'pending' in loc_lower: row_tags = ('pending',)
+            if 'closed' in loc_lower or 'removed' in loc_lower: row_tags = ('removed',)
+            elif 'verification' in loc_lower or 'pending' in loc_lower: row_tags = ('pending',)
             elif 'system' in loc_lower: row_tags = ('system',)
                 
             self.tree.insert("", tk.END, text=item_id, values=display_row, tags=row_tags)
             
         if warning_msg: self.notify(warning_msg)
-        # --- THE FIX: Force the UI to physically sort the new data ---
         self.treeview_sort_column(self.current_sort_col, self.current_sort_reverse)
 
     def load_data(self, source_type, search_query="", is_auto_refresh=False, year=None, month=None):
@@ -616,9 +615,9 @@ class LogViewerWindow:
             loc_lower = clean_loc.lower()
             row_tags = ()
             
-            if 'removed' in loc_lower: row_tags = ('removed',)
+            if 'closed' in loc_lower or 'removed' in loc_lower: row_tags = ('removed',)
             elif is_old: row_tags = ('overdue',)
-            elif 'pending' in loc_lower: row_tags = ('pending',)
+            elif 'verification' in loc_lower or 'pending' in loc_lower: row_tags = ('pending',)
             elif 'system' in loc_lower: row_tags = ('system',)
             
             inserted = self.tree.insert("", tk.END, text=item_id, values=display_row, tags=row_tags)
@@ -641,7 +640,8 @@ class LogViewerWindow:
 
     def copy_selection(self, event=None):
         selected = self.tree.selection()
-        if not selected: return
+        if not selected: 
+            return "break"
         copied_lines = []
         for item in selected:
             values = self.tree.item(item, "values")
@@ -650,6 +650,7 @@ class LogViewerWindow:
         self.viewer.clipboard_clear()
         self.viewer.clipboard_append("\n".join(copied_lines))
         self.notify(f"Copied {len(selected)} rows to clipboard" if len(selected) > 1 else "Copied 1 row to clipboard")
+        return "break"  # Stops event propagation and prevents duplicate firing
 
     def open_external_file(self):
         file_to_open = self.storage.get_active_file_path(

@@ -13,12 +13,12 @@
 ✔ launch on windows startup option or by default @high @done (6/14/2026, 1:23:41 AM)
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 ✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
-✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
+✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ☐ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ??? @cancelled (6/13/2026, 2:21:16 AM)
 ☐ graphical style revamp to fit BW thmx palette @low
 ☐ dark/white theme @low (make sure icons are correct)
-☐ animate blinking for error and action reqiured popups
+☐ animate blinking for error and action reqiured popups @high 
 ☐ mapped storage??? like visualization of storage and where things are etc. @low
 ✔ Whole History Viewer (because rn you can only see actual month history) OPTIMIZATION NEEDED (server recives client queries) @critical @today @done (9/7/2026, 11:28:12 AM)
 ✔ deep search allowing to search for history of everything in the lab @done (9/7/2026, 11:27:49 AM)
@@ -33,10 +33,11 @@
 ✔ limit to only one app instance (with error on screen if you want to open another one) @critical @today @done (9/10/2026, 12:27:24 PM)
 ✔ "hamburger" menu for declutering when window size is smaller than minimal size (and capped window size to prevent squished buttons) @done (9/14/2026, 9:48:47 AM)
 ✔ add keybind actions @low @done (9/14/2026, 3:04:10 PM)
-☐ fix a bug with open in external editor polish characters displayed wrong
-☐ fix a bug with weird behaviour after first time registration
-☐ change naming a bit (Pending-Storage -> verification queue | action removed -> request closed)
-☐ fix autorefresh
+✔ fix a bug with weird behaviour after first time registration @done (9/15/2026, 9:47:27 AM)
+✔ fix a bug with open in external editor polish characters displayed wrong @done (9/15/2026, 9:03:31 AM)
+✔ change naming a bit (Pending-Storage -> verification queue | action removed -> request closed) @done (9/15/2026, 9:30:26 AM)
+✘ fix autorefresh @cancelled (9/15/2026, 9:30:34 AM) (it works for inventory only and if you want you can F5 your logs)
+✔ log viewer bring newest instance to top clicking 3rd time in tray @done (9/15/2026, 10:20:57 AM)
 ✔ SERVER AND CLIENT SEPARATION @today @done (9/3/2026, 3:54:06 PM)
 SERVER:
     ✔ Server configuration after first launch (path etc.) [and some protection if path is not present then point to config again] @done (9/3/2026, 3:54:46 PM)
@@ -46,6 +47,7 @@ SERVER:
     ✘ log viewer records editor (edit, create??, delete) @high @cancelled (9/14/2026, 2:53:17 PM)
     ✔ remove "LOC:" from location data in the csv storage @critical @done (9/8/2026, 10:10:07 AM)
     ✔ live user counter based ping heartbeat @done (9/9/2026, 12:36:32 PM)
+    ✔ clicking tray option for manage employee bring the window to the top of the screen @done (9/15/2026, 10:12:30 AM)
     CLIENT:
         ✔ doesnt create folders @done (9/3/2026, 3:56:11 PM)
         ✔ only read write existing log files [and some protection if path is not present then point to config again] @done (9/3/2026, 3:56:15 PM)
@@ -57,8 +59,8 @@ SERVER:
         
 Excel data integration:
     ☐ "materials laboratory request" fetch only
-    ☐ restruct whole inventory and history logs with new columns headers and storage
-    ☐ qr printer automation if possible 
+    ☐ restruct whole inventory and history logs with new columns headers and storage @today
+    ☐ qr printer automation if possible  
     
 TESTING:
     ☐ duplications (does they even occur in sample trace after scanning same things twice or offline moded 2 users connect to server and sends the same things twice)
