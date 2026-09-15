@@ -14,7 +14,7 @@ class CsvStorage:
         self.sync_path = sync_path
         self.sync_interval = sync_interval
 
-        self.recent_scans = {} # Tracks recent hashes to block duplicates
+        self.recent_scans = {} 
         self.lock = threading.Lock()
         self._ensure_files_exist()
         
@@ -25,11 +25,11 @@ class CsvStorage:
         if not os.path.exists(self.inventory_file):
             with open(self.inventory_file, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f, delimiter=';')
-                writer.writerow(["Date", "Time", "Location", "Sample ID", "Name", "Notes", "User"])
+                # --- NEW SCHEMA HEADER ---
+                writer.writerow(["Date", "Time", "Location", "Sample ID", "Requestor", "Functional Dept", "Project Number", "User"])
         if not os.path.exists(self.history_dir):
             os.makedirs(self.history_dir)
 
-    # --- NETWORK SYNC LOGIC (Same as before) ---
     def is_server_available(self):
         if not self.sync_path: return False
         return os.path.exists(self.sync_path)
@@ -60,12 +60,7 @@ class CsvStorage:
                 shutil.copytree(self.history_dir, os.path.join(self.sync_path, "history_logs"), dirs_exist_ok=True)
             except Exception: pass 
 
-    def _network_sync_loop(self):
-        while True:
-            time.sleep(self.sync_interval)
-            self._perform_sync()
-
-    def _log_to_history(self, location, sample_id, name, notes, user):
+    def _log_to_history(self, location, sample_id, requestor, dept, project, user):
         now = datetime.now()
         date_str, time_str = now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S")
         year_str, month_str = now.strftime("%Y"), now.strftime("%m")
@@ -75,15 +70,16 @@ class CsvStorage:
             
         history_file = os.path.join(year_dir, f"log_{month_str}.csv")
         location = location.replace('LOC:', '').replace('LOC-', '').strip()
-        row = [date_str, time_str, location, sample_id, name, notes, user]
+        
+        # --- NEW 8 COLUMN ROW ---
+        row = [date_str, time_str, location, sample_id, requestor, dept, project, user]
         
         if not os.path.exists(history_file):
             with open(history_file, 'w', newline='', encoding='utf-8-sig') as f:
-                csv.writer(f, delimiter=';').writerow(["Date", "Time", "Location", "Sample ID", "Name", "Notes", "User"])
+                csv.writer(f, delimiter=';').writerow(["Date", "Time", "Location", "Sample ID", "Requestor", "Functional Dept", "Project Number", "User"])
         with open(history_file, 'a', newline='', encoding='utf-8-sig') as f:
             csv.writer(f, delimiter=';').writerow(row)
 
-    # --- UPGRADED EMPLOYEE JSON MANAGEMENT ---
     def get_employees(self):
         with self.lock:
             try:
@@ -99,7 +95,6 @@ class CsvStorage:
         return None
         
     def get_employee_by_ad(self, ad_username):
-        """Looks up an employee by their Windows AD Login"""
         emps = self.get_employees()
         for b_id, data in emps.items():
             if data.get("ad_username", "").lower() == ad_username.lower():
@@ -125,11 +120,10 @@ class CsvStorage:
             with open(self.employees_file, 'w', encoding='utf-8') as f:
                 json.dump(emps, f, indent=4)
                 
-            self._log_to_history("SYSTEM: REGISTRATION", f"ID:{badge_id}", full_name, f"AD: {ad_username}", "SYSTEM")
+            self._log_to_history("SYSTEM: REGISTRATION", f"ID:{badge_id}", full_name, f"AD: {ad_username}", "SYSTEM LOG", "SYSTEM")
         self._trigger_immediate_sync()
 
     def delete_employee(self, badge_id):
-        """Permanently removes an employee from the master JSON file."""
         with self.lock:
             try:
                 if os.path.exists(self.employees_file):
@@ -143,15 +137,13 @@ class CsvStorage:
                         with open(self.employees_file, 'w', encoding='utf-8') as f: 
                             json.dump(emps, f, indent=4)
                             
-                        # Log the administrative deletion to the permanent history
-                        self._log_to_history("SYSTEM: DELETION", f"ID:{badge_id}", deleted_name, "Employee profile manually deleted", "SERVER ADMIN")
+                        self._log_to_history("SYSTEM: DELETION", f"ID:{badge_id}", deleted_name, "Manually Deleted", "SYSTEM LOG", "SERVER ADMIN")
                         self._trigger_immediate_sync()
                         return True
             except Exception: 
                 pass
             return False
 
-    # --- INVENTORY CSV MANAGEMENT (Same as before) ---
     def sample_exists(self, sample_id):
         with self.lock:
             try:
@@ -163,6 +155,7 @@ class CsvStorage:
             except Exception: pass
         return False
 
+    # Renamed variable inside for client compatibility
     def get_sample_name(self, sample_id):
         with self.lock:
             try:
@@ -170,19 +163,22 @@ class CsvStorage:
                     reader = csv.reader(f, delimiter=';')
                     next(reader, None)
                     for row in reader:
-                        if len(row) >= 5 and row[3] == sample_id: return row[4]
+                        # Returns a nice combo of Requestor and Project for the UI confirmation popup!
+                        if len(row) >= 7 and row[3] == sample_id: 
+                            return f"Req: {row[4]} | Proj: {row[6]}"
             except Exception: pass
         return "Unknown Sample"
 
-    def save_data_async(self, location_id, sample_id, user, message_queue, sample_name="N/A", desc_notes="N/A", force_create=False):
-        threading.Thread(target=self._save_data, args=(location_id, sample_id, user, message_queue, sample_name, desc_notes, force_create), daemon=True).start()
+    # --- UPDATED DATA PARSERS ---
+    def save_data_async(self, location_id, sample_id, user, message_queue, requestor="N/A", dept="N/A", project="N/A", force_create=False):
+        threading.Thread(target=self._save_data, args=(location_id, sample_id, user, message_queue, requestor, dept, project, force_create), daemon=True).start()
 
-    def _save_data(self, location_id, sample_id, user, message_queue, sample_name, desc_notes, force_create):
-        sample_name = sample_name.replace('\n', ' | ').replace('\r', '')
-        desc_notes = desc_notes.replace('\n', ' | ').replace('\r', '')
+    def _save_data(self, location_id, sample_id, user, message_queue, requestor, dept, project, force_create):
+        requestor = requestor.replace('\n', ' ').replace('\r', '')
+        dept = dept.replace('\n', ' ').replace('\r', '')
+        project = project.replace('\n', ' ').replace('\r', '')
         
         with self.lock:
-            # --- DEDUPLICATION FILTER ---
             if not hasattr(self, 'recent_scans'):
                 self.recent_scans = {}
             
@@ -190,9 +186,8 @@ class CsvStorage:
             current_time = time.time()
             if scan_signature in self.recent_scans:
                 if current_time - self.recent_scans[scan_signature] < 3.0:
-                    return  # Silently discard duplicate packet received within 3 seconds
+                    return  
             self.recent_scans[scan_signature] = current_time
-            # ----------------------------
 
             now = datetime.now()
             date_str, time_str = now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S")
@@ -205,24 +200,24 @@ class CsvStorage:
                     header = next(reader, None)
                     if header: rows_to_keep.append(header)
                     for r in reader:
-                        if len(r) >= 6 and r[3] == sample_id:
+                        if len(r) >= 7 and r[3] == sample_id:
                             found_existing = True
                             if not force_create:
-                                if r[4] != "N/A": sample_name = r[4]
-                                if r[5] != "N/A": desc_notes = r[5]
-                            rows_to_keep.append([date_str, time_str, location_id, sample_id, sample_name, desc_notes, user])
+                                if r[4] != "N/A": requestor = r[4]
+                                if r[5] != "N/A": dept = r[5]
+                                if r[6] != "N/A": project = r[6]
+                            rows_to_keep.append([date_str, time_str, location_id, sample_id, requestor, dept, project, user])
                         else: rows_to_keep.append(r)
             except Exception: pass
 
-            if not found_existing: rows_to_keep.append([date_str, time_str, location_id, sample_id, sample_name, desc_notes, user])
+            if not found_existing: rows_to_keep.append([date_str, time_str, location_id, sample_id, requestor, dept, project, user])
 
             with open(self.inventory_file, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f, delimiter=';')
                 writer.writerows(rows_to_keep)
                 
-            self._log_to_history(location_id, sample_id, sample_name, desc_notes, user)
+            self._log_to_history(location_id, sample_id, requestor, dept, project, user)
             
-            # Server might not have a message queue (API calls), so check first
             if message_queue:
                 clean_loc = location_id.replace('LOC:', '').strip()
                 message_queue.put(f"Saved: {sample_id}\nLocation: {clean_loc}")
@@ -234,7 +229,7 @@ class CsvStorage:
 
     def _remove_data(self, sample_id, user, message_queue):
         with self.lock:
-            sample_name = "Unknown Sample"
+            req, dept, proj = "Unknown", "Unknown", "Unknown"
             rows_to_keep = []
             try:
                 with open(self.inventory_file, 'r', encoding='utf-8') as f:
@@ -242,13 +237,17 @@ class CsvStorage:
                     header = next(reader, None)
                     if header: rows_to_keep.append(header)
                     for row in reader:
-                        if len(row) > 3 and row[3] == sample_id: sample_name = row[4] if len(row) > 4 else "Unknown Sample"
-                        else: rows_to_keep.append(row)
+                        if len(row) > 6 and row[3] == sample_id: 
+                            req, dept, proj = row[4], row[5], row[6]
+                        else: 
+                            rows_to_keep.append(row)
                             
                 with open(self.inventory_file, 'w', newline='', encoding='utf-8-sig') as f:
                     writer = csv.writer(f, delimiter=';')
                     writer.writerows(rows_to_keep)
-                self._log_to_history("REQUEST CLOSED", sample_id, sample_name, "Sample permanently removed", user)
+                    
+                # Perfect alignment with the new columns
+                self._log_to_history("REQUEST CLOSED", sample_id, req, dept, proj, user)
             except Exception: pass
         if message_queue: message_queue.put(f"Removed: {sample_id}\nBy: {user}")
         self._trigger_immediate_sync()

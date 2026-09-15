@@ -1,4 +1,3 @@
-# server_api.py
 import os
 import json
 import csv
@@ -17,22 +16,18 @@ class LabTrackAPI:
         self.storage = storage_manager
         self.app = Flask(__name__)
 
-        # --- ULTRA-FAST RAM CACHE ---
         self.view_cache = {}
         self.cache_lock = threading.Lock()
 
-        # --- LIVE USER TRACKING ---
         self.active_clients = {}
         threading.Thread(target=self._cleanup_inactive_clients, daemon=True).start()
 
         self._setup_routes()
 
     def _cleanup_inactive_clients(self):
-        """Background loop that deletes clients who haven't pinged in 15 seconds."""
         while True:
             current_time = time.time()
             for ip in list(self.active_clients.keys()):
-                # Bumped to 15 seconds to give network latency some breathing room
                 if current_time - self.active_clients.get(ip, 0) > 10:
                     del self.active_clients[ip]
             time.sleep(3)
@@ -43,14 +38,12 @@ class LabTrackAPI:
     def _setup_routes(self):
         @self.app.before_request
         def track_active_users():
-            """Intercepts every incoming API request and updates the client's heartbeat."""
             client_ip = request.remote_addr
             self.active_clients[client_ip] = time.time()
-            # print(f"[HEARTBEAT] Ping received from {client_ip}")
         
         @self.app.route('/api/ping', methods=['GET'])
         def ping():
-            return jsonify({"status": "online", "version": "1.0"}), 200
+            return jsonify({"status": "online", "version": "2.0"}), 200
 
         @self.app.route('/api/get_inventory', methods=['GET'])
         def get_inventory():
@@ -81,15 +74,18 @@ class LabTrackAPI:
                 
             loc_id = data.get("location_id")
             smp_id = data.get("sample_id")
-            smp_name = data.get("sample_name", "N/A")
-            notes = data.get("desc_notes", "N/A")
             user = data.get("user", "Unknown")
             is_force_create = data.get("force_create", False)
 
+            # --- THE NEW PAYLOAD VARIABLES ---
+            requestor = data.get("requestor", "N/A")
+            dept = data.get("functional_dept", "N/A")
+            project = data.get("project_number", "N/A")
+
             self.storage.save_data_async(
                 location_id=loc_id, sample_id=smp_id, user=user, 
-                message_queue=None, sample_name=smp_name, 
-                desc_notes=notes, force_create=is_force_create
+                message_queue=None, requestor=requestor, 
+                dept=dept, project=project, force_create=is_force_create
             )
             return jsonify({"status": "success"}), 200
 
@@ -101,7 +97,6 @@ class LabTrackAPI:
 
         @self.app.route('/api/get_archive_months', methods=['GET'])
         def get_archive_months():
-            """Returns the list of available history months to populate the Client's dropdown."""
             settings_path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'server_settings.json')
             try:
                 with open(settings_path, 'r') as f:
@@ -122,7 +117,6 @@ class LabTrackAPI:
 
         @self.app.route('/api/view_data', methods=['GET'])
         def api_view_data():
-            """Natively sorts massive files, uses RAM caching to prevent DDoS, and returns top 1500."""
             source = request.args.get('source', 'inventory')
             year = request.args.get('year', '')
             month = request.args.get('month', '')
@@ -141,7 +135,6 @@ class LabTrackAPI:
             else:
                 filepath = os.path.join(base_path, "history_logs", year, f"log_{month}.csv")
 
-            # --- CACHE CHECK ---
             try:
                 current_mtime = os.path.getmtime(filepath)
             except Exception:
@@ -153,7 +146,6 @@ class LabTrackAPI:
                     if self.view_cache[cache_key]['mtime'] == current_mtime:
                         return jsonify({"results": self.view_cache[cache_key]['data']})
 
-            # --- HARD DRIVE READ ---
             results = []
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
@@ -162,8 +154,8 @@ class LabTrackAPI:
             except Exception:
                 return jsonify({"results": []})
 
-            # Native Sort
-            cols = ["Date/Day", "Time", "Location", "Sample ID", "Name", "Notes", "User"]
+            # --- THE NEW 8 COLUMNS ---
+            cols = ["Date/Day", "Time", "Location", "Sample ID", "Requestor", "Functional Dept", "Project Number", "User"]
             col_idx = cols.index(sort_col) if sort_col in cols else 0
 
             if sort_col in ("Date/Day", "Time"):
@@ -173,7 +165,6 @@ class LabTrackAPI:
 
             final_results = results[:1500]
 
-            # Save to RAM
             with self.cache_lock:
                 self.view_cache[cache_key] = {"mtime": current_mtime, "data": final_results}
 
@@ -181,7 +172,6 @@ class LabTrackAPI:
 
         @self.app.route('/api/search', methods=['GET'])
         def api_deep_search():
-            """High-speed threaded search engine for massive CSV archives."""
             query = request.args.get('q', '').strip()
             if not query:
                 return jsonify({"results": [], "warning": ""})
@@ -230,14 +220,13 @@ class LabTrackAPI:
                     results.extend(file_results)
                     if len(results) >= max_results:
                         results = results[:max_results]
-                        warning_msg = "⚠️ Displaying first 1,000 results.\nPlease use more specific search terms."
+                        warning_msg = "ÔÜá´ŞĆ Displaying first 1,000 results.\nPlease use more specific search terms."
                         executor.shutdown(wait=False, cancel_futures=True) 
                         break
 
             return jsonify({"results": results, "warning": warning_msg})
 
     def start_server(self, host='0.0.0.0', port=5000):
-        """Runs the Flask API in a silent background thread."""
         server_thread = threading.Thread(target=self.app.run, kwargs={'host': host, 'port': port, 'debug': False, 'use_reloader': False})
         server_thread.daemon = True
         server_thread.start()

@@ -214,7 +214,12 @@ class LogViewerWindow:
 
         self.tag_widgets = {}
         quick_tags = []
-        if not self.is_server: quick_tags.append(("My Samples", "ME"))
+        
+        if not self.is_server: 
+            quick_tags.append(("My Samples", "ME"))
+        else:
+            quick_tags.append(("System", "system"))
+            
         quick_tags.extend([("Today", "today"), ("Old", "old"), ("Verification", "verification queue"), ("Closed", "request closed")])
 
         def toggle_tag(keyword, lbl_widget):
@@ -223,7 +228,16 @@ class LogViewerWindow:
             else: target = keyword
                 
             if not target: return
-            if keyword in ["ME", "old", "verification queue", "today"]: self.current_tab[0] = 'inventory'
+
+            if keyword in ["ME", "old", "verification queue", "today"]: 
+                self.current_tab[0] = 'inventory'
+            elif keyword in ["system", "request closed"]:
+                # If they click System or Closed while in Active Inventory, teleport to Current Month Logs!
+                if self.current_tab[0] == 'inventory':
+                    now = datetime.now()
+                    self.current_tab[0] = 'history_specific'
+                    self.current_history_target[0] = now.strftime("%Y")
+                    self.current_history_target[1] = now.strftime("%m")
 
             was_active = False
             if target in self.active_filters:
@@ -309,16 +323,19 @@ class LogViewerWindow:
         self.d4.pack(fill=tk.X, padx=10, pady=(5, 10), ipady=3)
 
         # --- DATA TABLE ---
-        columns = ("Date/Day", "Time", "Location", "Sample ID", "Name", "Notes", "User")
+        columns = ("Date/Day", "Time", "Location", "Sample ID", "Requestor", "Functional Dept", "Project Number", "User")
         self.tree = ttk.Treeview(self.viewer, columns=columns, show="headings", height=15)
         for col in columns: self.tree.heading(col, text=col)
+        
+        # New carefully calculated widths to fit the 1000px window smoothly
         self.tree.column("Date/Day", width=90, anchor=tk.CENTER)
         self.tree.column("Time", width=80, anchor=tk.CENTER)
-        self.tree.column("Location", width=180, anchor=tk.W)
+        self.tree.column("Location", width=160, anchor=tk.CENTER)
         self.tree.column("Sample ID", width=90, anchor=tk.CENTER)
-        self.tree.column("Name", width=150, anchor=tk.W)
-        self.tree.column("Notes", width=250, anchor=tk.W) 
-        self.tree.column("User", width=120, anchor=tk.CENTER)
+        self.tree.column("Requestor", width=140, anchor=tk.CENTER)
+        self.tree.column("Functional Dept", width=150, anchor=tk.CENTER) 
+        self.tree.column("Project Number", width=140, anchor=tk.CENTER) 
+        self.tree.column("User", width=110, anchor=tk.CENTER)
 
         scrollbar = ttk.Scrollbar(self.viewer, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
@@ -469,11 +486,8 @@ class LogViewerWindow:
             primary = str(item[0]).strip().lower()
             tie_breaker = str(item[1])
             
-            if primary.startswith("smp:"):
-                try:
-                    return (0, int(primary.replace("smp:", "")), tie_breaker)
-                except ValueError:
-                    pass
+            if primary.isdigit():
+                return (0, int(primary), tie_breaker)
                     
             return (1, primary, tie_breaker)
 

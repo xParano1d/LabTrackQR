@@ -202,7 +202,7 @@ class NotificationManager:
                     now = datetime.now()
                     
                     for row in data:
-                        if len(row) >= 7 and row[6].lower() == current_user_name.lower() and "removed" not in row[2].lower() and "closed" not in row[2].lower():
+                        if len(row) >= 8 and row[7].lower() == current_user_name.lower() and "removed" not in row[2].lower() and "closed" not in row[2].lower():
                             try:
                                 row_date = datetime.strptime(str(row[0]), "%Y-%m-%d")
                                 if (now - row_date).days >= 14:
@@ -580,7 +580,6 @@ class NotificationManager:
         if not active_users and self.scanner_mgr and self.scanner_mgr.ad_fallback_name:
             active_users.append(self.scanner_mgr.ad_fallback_name)
 
-        # If it's STILL empty (no scanner AND no AD), then deny access
         if not active_users:
             import winsound
             winsound.MessageBeep(winsound.MB_ICONHAND)
@@ -589,7 +588,8 @@ class NotificationManager:
 
         form = tk.Toplevel(self.root)
         form.title("Manual Sample Entry")
-        form.geometry("450x430") 
+        # Made the window slightly taller to fit the new fields comfortably!
+        form.geometry("450x520") 
         form.overrideredirect(True)
         form.configure(bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc") 
         form.attributes("-topmost", True)
@@ -604,21 +604,30 @@ class NotificationManager:
         close_btn = tk.Button(form, text="✕", command=form.destroy, bg="#ffffff", fg="#999999", font=("Segoe UI", 12, "bold"), relief="flat", activebackground="#ffcccc", cursor="hand2")
         close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
 
-        def only_numbers(char):
-            return char.isdigit() or char == ""
+        def only_numbers(P):
+            return (P.isdigit() and len(P) <= 6) or P == ""
         val_numbers = (form.register(only_numbers), '%P')
 
-        tk.Label(form, text="Sample ID (Numbers only, e.g. 123)", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(15, 2))
+        tk.Label(form, text="Sample ID (6-Digit Number)", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(15, 2))
         entry_id = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1, validate="key", validatecommand=val_numbers)
         entry_id.pack(pady=5, ipady=4)
 
-        tk.Label(form, text="Sample Name", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
-        entry_name = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1)
-        entry_name.pack(pady=5, ipady=4)
+        tk.Label(form, text="Requestor Name", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(5, 2))
+        entry_req = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1)
+        entry_req.pack(pady=5, ipady=4)
         
-        tk.Label(form, text="Description / Notes", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
-        entry_notes = tk.Text(form, width=38, height=3, font=("Segoe UI", 11), relief="solid", bd=1, wrap=tk.WORD)
-        entry_notes.pack(pady=5)
+        tk.Label(form, text="Functional Department", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(5, 2))
+        dept_var = tk.StringVar()
+
+        combo_dept = ttk.Combobox(form, textvariable=dept_var, state="readonly", font=("Segoe UI", 11), width=36, justify="center")
+        
+        combo_dept['values'] = ("Customer Teams", "Engineering", "Global Materials Development", "Laboratories", "Quality", "Reman & Proto", "Technical Analysis")
+        combo_dept.pack(pady=5, ipady=4)
+
+        tk.Label(form, text="Project Number", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(5, 2))
+        entry_proj = tk.Entry(form, width=38, justify="center", font=("Segoe UI", 11), relief="solid", bd=1)
+        entry_proj.pack(pady=5, ipady=4)
+
 
         tk.Label(form, text="Active Session", bg="#ffffff", fg="#333333", font=("Segoe UI", 10, "bold")).pack(pady=(10, 2))
         
@@ -628,7 +637,6 @@ class NotificationManager:
             tk.Label(form, text=active_users[0], bg="#e8f4ea", fg="#217346", font=("Segoe UI", 11, "bold"), width=34, relief="solid", bd=1).pack(pady=5, ipady=4)
         else:
             selected_user.set(active_users[0])
-            from tkinter import ttk
             combo_user = ttk.Combobox(form, textvariable=selected_user, values=active_users, state="readonly", font=("Segoe UI", 11, "bold"), width=34)
             combo_user.pack(pady=5)
 
@@ -636,30 +644,34 @@ class NotificationManager:
             event.widget.config(bg="#ffffff")
             
         entry_id.bind("<Key>", reset_bg)
-        entry_name.bind("<Key>", reset_bg)
+        entry_req.bind("<Key>", reset_bg)
+        entry_proj.bind("<Key>", reset_bg)
 
         def save_manual_entry():
             id_raw = entry_id.get().strip()
-            name_val = entry_name.get().strip().replace('\n', ' ').replace('\r', '')
-            notes_val = entry_notes.get("1.0", tk.END).strip().replace('\n', ' | ').replace('\r', '')
+            req_val = entry_req.get().strip().replace('\n', ' ').replace('\r', '')
+            dept_val = dept_var.get().strip()
+            proj_val = entry_proj.get().strip().replace('\n', ' ').replace('\r', '')
             user_val = selected_user.get() 
             
-            if id_raw.isdigit() and name_val and user_val: 
-                formatted_id = f"SMP:{id_raw}"
+            # --- THE FIX: Added len(id_raw) == 6 requirement! ---
+            if len(id_raw) == 6 and id_raw.isdigit() and req_val and dept_val and proj_val and user_val: 
                 if self.storage:
                     self.storage.save_data_async(
                         location_id="LOC: Verification Queue", 
-                        sample_id=formatted_id,
-                        sample_name=name_val, 
-                        desc_notes=notes_val, 
+                        sample_id=id_raw,
+                        requestor=req_val, 
+                        dept=dept_val, 
+                        project=proj_val,
                         user=user_val, 
                         message_queue=self.message_queue,
                         force_create=True 
                     )
                 form.destroy()
             else:
-                if not id_raw or not id_raw.isdigit(): entry_id.config(bg="#ffcccc")
-                if not name_val: entry_name.config(bg="#ffcccc")
+                if not id_raw or not id_raw.isdigit() or len(id_raw) != 6: entry_id.config(bg="#ffcccc")
+                if not req_val: entry_req.config(bg="#ffcccc")
+                if not proj_val: entry_proj.config(bg="#ffcccc")
 
         tk.Button(form, text="Initialize Item", command=save_manual_entry, bg="#011528", fg="white", font=("Segoe UI", 11, "bold"), relief="flat", width=20, cursor="hand2").pack(pady=(15, 20))
 

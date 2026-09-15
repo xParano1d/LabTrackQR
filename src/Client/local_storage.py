@@ -147,16 +147,20 @@ class ApiStorage:
             try:
                 with open(self.cache_file, 'r') as f: cache = json.load(f)
                 for row in cache:
-                    if len(row) > 4 and row[3] == sample_id: return row[4]
+                    # Look at row[4] and row[6] to build the nice UI string!
+                    if len(row) >= 7 and row[3] == sample_id: 
+                        return f"Req: {row[4]} | Proj: {row[6]}"
             except Exception: pass
         return "Unknown Sample"
 
     # --- QUEUE DATA WRITERS ---
-    def save_data_async(self, location_id, sample_id, user, message_queue, sample_name="N/A", desc_notes="N/A", force_create=False):
+    def save_data_async(self, location_id, sample_id, user, message_queue, requestor="N/A", dept="N/A", project="N/A", force_create=False):
         location_id = location_id.replace('LOC:', '').strip()
+        sample_id = sample_id.replace('SMP:', '').strip()
         payload = {
             "location_id": location_id, "sample_id": sample_id, "user": user,
-            "sample_name": sample_name, "desc_notes": desc_notes, "force_create": force_create,
+            "requestor": requestor, "functional_dept": dept, "project_number": project, 
+            "force_create": force_create,
             "client_timestamp": datetime.now().isoformat()
         }
         with self.lock:

@@ -181,8 +181,8 @@ class ScannerNode:
 
                             # --- THE REMOVAL VALIDATION GATE ---
                             if self.manager and self.manager.removal_mode and scanned_text.startswith("SMP:"):
-                                scanned_text = scanned_text.replace("SMP: ", "SMP:")
-                                
+                                scanned_text = scanned_text.replace("SMP: ", "SMP:").replace("SMP:", "").strip()
+
                                 if not self.storage.sample_exists(scanned_text):
                                     winsound.MessageBeep(winsound.MB_ICONASTERISK)
                                     self.message_queue.put(f"Removal Error:\n{scanned_text} is not in the system.")
@@ -208,7 +208,7 @@ class ScannerNode:
                                 self.pending_samples.clear()
 
                             elif scanned_text.startswith("SMP:"):
-                                scanned_text = scanned_text.replace("SMP: ", "SMP:")
+                                scanned_text = scanned_text.replace("SMP: ", "SMP:").replace("SMP:", "").strip()
 
                                 if not self.storage.sample_exists(scanned_text):
                                     winsound.MessageBeep(winsound.MB_ICONASTERISK)

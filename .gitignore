@@ -19,6 +19,7 @@ scans_log.txt
 scans_log.csv
 name.py
 test_data.py
+fetch_test.py
 *.csv
 *.json
 
