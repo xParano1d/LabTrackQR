@@ -20,8 +20,6 @@ scans_log.csv
 name.py
 test_data.py
 fetch_test.py
-*.csv
-*.json
 
 # =========================
 # OS Specific Files

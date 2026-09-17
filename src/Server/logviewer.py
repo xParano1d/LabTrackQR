@@ -1,4 +1,7 @@
 # logviewer.py
+import customtkinter as ctk
+ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # THE MASTER FIX
+
 import tkinter as tk
 from tkinter import ttk
 import os
@@ -8,7 +11,7 @@ import ctypes
 import threading
 import requests
 import re
-from PIL import Image, ImageTk
+from PIL import Image
 from datetime import datetime
 
 def resource_path(file_name):
@@ -36,13 +39,30 @@ class LogViewerWindow:
         self.is_server = is_server
         self.current_user = current_user
         
-        self.viewer = tk.Toplevel(parent_root)
+        self.tab_memory = None 
+        
+        theme_path = resource_path("BW_theme.json")
+        if os.path.exists(theme_path):
+            ctk.set_default_color_theme(theme_path)
+            
+        self.viewer = ctk.CTkToplevel(parent_root)
         self.viewer.title("System Logs & Inventory")
-        self.viewer.geometry("1000x550")
-        self.viewer.configure(bg="#f4f4f4")
+        
+        width, height = 1100, 600
+        self.viewer.update_idletasks()
+        
+        screen_w = self.viewer.winfo_screenwidth()
+        screen_h = self.viewer.winfo_screenheight()
+        
+        x = int((screen_w / 2) - (width / 2))
+        y = int((screen_h / 2) - (height / 2))
+        
+        self.viewer.geometry(f"{width}x{height}+{x}+{y}")
         
         try:
-            self.viewer.iconbitmap(default=resource_path(get_theme_icon()))
+            icon_path = resource_path(get_theme_icon())
+            self.viewer.iconbitmap(icon_path)
+            self.viewer.after(200, lambda: self.viewer.iconbitmap(icon_path))
         except: pass
             
         self._apply_dark_title_bar(self.viewer)
@@ -50,12 +70,11 @@ class LogViewerWindow:
         self.current_tab = ['inventory'] 
         self.current_history_target = [None, None] 
         self.last_data_hash = [""] 
-        self.current_sort_col = "Date/Day"
+        self.current_sort_col = "Date"
         self.current_sort_reverse = True
         
         self.active_filters = set()
         self._pending_initial_filters = initial_filters or []
-        
         
         self._build_ui()
             
@@ -63,27 +82,25 @@ class LogViewerWindow:
         self.auto_refresh()
 
     def switch_view(self, source, year=None, month=None):
-        """Cleans up the UI (wipes search and buttons) before changing tabs."""
         if hasattr(self, 'force_close_menu'): self.force_close_menu()
 
+        self.tab_memory = None 
+        
         self.search_var.set("")
         if hasattr(self, 'active_filters'):
             self.active_filters.clear()
         if hasattr(self, 'tag_widgets'):
             for lbl in self.tag_widgets.values():
-                lbl.config(bg="#e8e8e8", fg="#333333") # Reset to grey
+                lbl.configure(fg_color="transparent", text_color=["#051728", "#FFFFFF"])
                 
         self.current_tab[0] = source
         self.current_history_target[0] = year
         self.current_history_target[1] = month
         
-        # Instantly wipe the screen and show a loading indicator 
-        # so you know the button click actually registered!
         self.tree.delete(*self.tree.get_children())
-        self.tree.insert("", tk.END, values=("", "", "⏳ LOADING DATA...", "Please wait...", "Fetching from server", "", ""))
+        self.tree.insert("", tk.END, values=("", "", "↻ LOADING DATA...", "Please wait...", "Fetching from server", "", ""))
         self.viewer.update_idletasks()
         
-        # Now safely fetch the data in the background
         self.load_data(source, "", year=year, month=month)
 
     def _apply_dark_title_bar(self, window):
@@ -98,9 +115,14 @@ class LogViewerWindow:
 
             DWMWA_CAPTION_COLOR = 35
             DWMWA_TEXT_COLOR = 36
-            bg_color = ctypes.c_int(0x00281501)
-            text_color = ctypes.c_int(0x00FFFFFF) 
             
+            if ctk.get_appearance_mode() == "Dark":
+                bg_color = ctypes.c_int(0x00281501)
+                text_color = ctypes.c_int(0x00FFFFFF) 
+            else:
+                bg_color = ctypes.c_int(0x00EBF0F2) 
+                text_color = ctypes.c_int(0x00281501)
+                
             set_window_attribute(hwnd, DWMWA_CAPTION_COLOR, ctypes.byref(bg_color), ctypes.sizeof(bg_color))
             set_window_attribute(hwnd, DWMWA_TEXT_COLOR, ctypes.byref(text_color), ctypes.sizeof(text_color))
         except Exception:
@@ -117,11 +139,11 @@ class LogViewerWindow:
             pass
         return []
 
-    def fetch_view_data(self, source, year=None, month=None, sort_col="Date/Day", reverse=True):
+    def fetch_view_data(self, source, year=None, month=None, sort_col="Date", reverse=True):
         if getattr(self.storage, 'is_offline_mode', False):
             if source == 'inventory':
                 return self.storage.get_inventory_data()
-            return [] # Cannot view history archives while offline
+            return [] 
 
         try:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
@@ -130,7 +152,6 @@ class LogViewerWindow:
                 "source": source, "year": year or "", "month": month or "",
                 "sort_col": sort_col, "reverse": str(reverse).lower()
             }
-
             resp = requests.get(url, params=params, timeout=3)
             if resp.status_code == 200:
                 return resp.json().get("results", [])
@@ -148,69 +169,57 @@ class LogViewerWindow:
         self.menu_is_open = False
         self.full_nav_width = 600 
         
-        # --- THE HOVER ENGINE ---
-        def apply_hover(widget, default_bg, hover_bg):
-            widget.bind("<Enter>", lambda e, w=widget, c=hover_bg: w.config(bg=c))
-            widget.bind("<Leave>", lambda e, w=widget, c=default_bg: w.config(bg=c))
-
-        self.top_frame = tk.Frame(self.viewer, bg="#f4f4f4")
+        self.top_frame = ctk.CTkFrame(self.viewer, fg_color="transparent")
         self.top_frame.pack(fill=tk.X, pady=10, padx=10)
         
         try:
-            m_img = Image.open(resource_path("menu.png")).resize((24, 24), Image.Resampling.LANCZOS)
-            self.icon_menu = ImageTk.PhotoImage(m_img)
-            mc_img = Image.open(resource_path("menuClose.png")).resize((24, 24), Image.Resampling.LANCZOS)
-            self.icon_menu_close = ImageTk.PhotoImage(mc_img)
+            m_img = Image.open(resource_path("menu.png"))
+            self.icon_menu = ctk.CTkImage(m_img, size=(24, 24))
+            mc_img = Image.open(resource_path("menuClose.png"))
+            self.icon_menu_close = ctk.CTkImage(mc_img, size=(24, 24))
+            
+            s_img = Image.open(resource_path("search.png"))
+            self.icon_search = ctk.CTkImage(s_img, size=(20, 20))
+            c_img = Image.open(resource_path("delete.png"))
+            self.icon_clear = ctk.CTkImage(c_img, size=(20, 20))
         except Exception:
             self.icon_menu = None
             self.icon_menu_close = None
+            self.icon_search = None
+            self.icon_clear = None
 
-        self.hamburger_btn = tk.Button(
-            self.top_frame, image=self.icon_menu, text="☰" if not self.icon_menu else "",
-            command=self.toggle_hamburger_menu, bg="#011528", fg="white", 
-            font=("Segoe UI", 14), relief="flat", cursor="hand2", padx=10
+        self.hamburger_btn = ctk.CTkButton(
+            self.top_frame, image=self.icon_menu, text="", width=40,
+            command=self.toggle_hamburger_menu, fg_color="transparent"
         )
-        apply_hover(self.hamburger_btn, "#011528", "#022a52") # Hover for Hamburger
         
-        self.collapsed_title = tk.Label(self.top_frame, text="System Logs & Inventory", bg="#f4f4f4", fg="#011528", font=("Segoe UI", 14, "bold"))
-        self.btn_frame = tk.Frame(self.top_frame, bg="#f4f4f4")
+        self.collapsed_title = ctk.CTkLabel(self.top_frame, text="System Logs & Inventory", font=("Segoe UI", 16, "bold"))
+        self.btn_frame = ctk.CTkFrame(self.top_frame, fg_color="transparent")
         self.btn_frame.pack(side=tk.LEFT)
 
-        self.search_container = tk.Frame(self.top_frame, bg="#f4f4f4")
+        self.search_container = ctk.CTkFrame(self.top_frame, fg_color="transparent")
         self.search_container.pack(side=tk.RIGHT)
-        search_frame = tk.Frame(self.search_container, bg="#f4f4f4")
+        search_frame = ctk.CTkFrame(self.search_container, fg_color="transparent")
         search_frame.pack(side=tk.TOP, anchor="e", padx=(0,3))
 
         self.search_var = tk.StringVar()
-        tk.Label(search_frame, text="Search:", bg="#f4f4f4", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=5)
+        ctk.CTkLabel(search_frame, text="Search:", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT, padx=5)
 
-        self.search_entry = tk.Entry(search_frame, textvariable=self.search_var, font=("Segoe UI", 10), width=24, relief="solid", bd=1)
-        self.search_entry.pack(side=tk.LEFT, ipady=3)
+        self.search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var, border_width=3, width=200)
+        self.search_entry.pack(side=tk.LEFT)
         self.search_entry.bind("<Return>", self.trigger_manual_search)
 
         def clear_search():
             self.search_var.set("")
             self.trigger_manual_search()
 
-        try:
-            s_img = Image.open(resource_path("search.png")).resize((22, 22), Image.Resampling.LANCZOS)
-            self.icon_search = ImageTk.PhotoImage(s_img)
-            c_img = Image.open(resource_path("delete.png")).resize((22, 22), Image.Resampling.LANCZOS)
-            self.icon_clear = ImageTk.PhotoImage(c_img)
-            search_btn = tk.Button(search_frame, image=self.icon_search, command=self.trigger_manual_search, bg="#011528", activebackground="#022a52", relief="flat", cursor="hand2", bd=0, padx=6, pady=2)
-            clear_btn = tk.Button(search_frame, image=self.icon_clear, command=clear_search, bg="#d9534f", activebackground="#c9302c", relief="flat", cursor="hand2", bd=0, padx=6, pady=2)
-        except Exception:
-            search_btn = tk.Button(search_frame, text="🔍", command=self.execute_search, bg="#011528", fg="white", font=("Segoe UI", 9), relief="flat", cursor="hand2", width=4 )
-            clear_btn = tk.Button(search_frame, text="⌫", command=clear_search, bg="#d9534f", fg="white", font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2", width=3, round=2)
+        search_btn = ctk.CTkButton(search_frame, image=self.icon_search, text="" if self.icon_search else "GO", command=self.trigger_manual_search, width=35)
+        clear_btn = ctk.CTkButton(search_frame, image=self.icon_clear, text="" if self.icon_clear else "X", command=clear_search, width=35, fg_color="#d9534f", hover_color="#c9302c")
+        search_btn.pack(side=tk.LEFT, padx=(5, 2))
+        clear_btn.pack(side=tk.LEFT, padx=(0, 0))
 
-        search_btn.pack(side=tk.LEFT, padx=(2, 2), ipady=2)
-        clear_btn.pack(side=tk.LEFT, padx=(0, 0), ipady=2)
-        
-        apply_hover(search_btn, "#011528", "#022a52") # Hover for Search
-        apply_hover(clear_btn, "#d9534f", "#c9302c")  # Hover for Clear
-
-        tags_frame = tk.Frame(self.search_container, bg="#f4f4f4")
-        tags_frame.pack(side=tk.TOP, anchor="e", pady=(2, 0))
+        tags_frame = ctk.CTkFrame(self.search_container, fg_color="transparent")
+        tags_frame.pack(side=tk.TOP, anchor="e", pady=(5, 0))
 
         self.tag_widgets = {}
         quick_tags = []
@@ -220,51 +229,69 @@ class LogViewerWindow:
         else:
             quick_tags.append(("System", "system"))
             
-        quick_tags.extend([("Today", "today"), ("Old", "old"), ("Verification", "verification queue"), ("Closed", "request closed")])
+        quick_tags.extend([("Verification", "verification queue"), ("Old", "old"), ("Today", "today"), ("Closed", "request closed")])
 
-        def toggle_tag(keyword, lbl_widget):
-            if keyword == "ME": target = self.current_user if self.current_user else ""
-            elif keyword == "today": target = datetime.now().strftime("%Y-%m-%d")
+        def toggle_tag(keyword, btn_widget):
+            if keyword == "ME": target = "MAGIC_ME_FILTER"
+            elif keyword == "today": target = "MAGIC_TODAY_FILTER"
             else: target = keyword
                 
             if not target: return
 
-            if keyword in ["ME", "old", "verification queue", "today"]: 
-                self.current_tab[0] = 'inventory'
-            elif keyword in ["system", "request closed"]:
-                # If they click System or Closed while in Active Inventory, teleport to Current Month Logs!
-                if self.current_tab[0] == 'inventory':
-                    now = datetime.now()
-                    self.current_tab[0] = 'history_specific'
-                    self.current_history_target[0] = now.strftime("%Y")
-                    self.current_history_target[1] = now.strftime("%m")
+            conflict_map = {
+                "MAGIC_TODAY_FILTER": ["old"],
+                "old": ["MAGIC_TODAY_FILTER"],
+                "request closed": ["system", "verification queue"],
+                "system": ["request closed", "verification queue"],
+                "verification queue": ["request closed", "system"]
+            }
+            conflicts = conflict_map.get(target, [])
 
-            was_active = False
-            if target in self.active_filters:
-                self.active_filters.remove(target)
-                was_active = True
-            if keyword in self.active_filters:
-                self.active_filters.remove(keyword)
-                was_active = True
+            was_active = target in self.active_filters
 
             if was_active:
-                lbl_widget.config(bg="#e8e8e8", fg="#333333") 
+                self.active_filters.remove(target)
+                btn_widget.configure(fg_color="transparent", text_color=["#051728", "#FFFFFF"])
+                
+                forcing_filters = {"old", "verification queue", "system", "request closed"}
+                active_forcing = [f for f in self.active_filters if f in forcing_filters]
+                
+                if len(active_forcing) == 0 and self.tab_memory:
+                    self.current_tab[0], self.current_history_target[0], self.current_history_target[1] = self.tab_memory
+                    self.tab_memory = None
             else:
+                for conflict in conflicts:
+                    if conflict in self.active_filters:
+                        self.active_filters.remove(conflict)
+                        conflict_kw = "today" if conflict == "MAGIC_TODAY_FILTER" else conflict
+                        if conflict_kw in self.tag_widgets:
+                            self.tag_widgets[conflict_kw].configure(fg_color="transparent", text_color=["#051728", "#FFFFFF"])
+
+                forces_inventory = keyword in ["old", "verification queue"]
+                forces_history = keyword in ["system", "request closed"]
+                
+                if forces_inventory or forces_history:
+                    if not self.tab_memory:
+                        self.tab_memory = (self.current_tab[0], self.current_history_target[0], self.current_history_target[1])
+                        
+                    if forces_inventory and self.current_tab[0] != 'inventory':
+                        self.current_tab[0] = 'inventory'
+                    elif forces_history and self.current_tab[0] != 'history_specific':
+                        now = datetime.now()
+                        self.current_tab[0] = 'history_specific'
+                        self.current_history_target[0] = now.strftime("%Y")
+                        self.current_history_target[1] = now.strftime("%m")
+                
                 self.active_filters.add(target)
-                lbl_widget.config(bg="#011528", fg="white") 
+                btn_widget.configure(fg_color=["#00386C", "#0E8187"], text_color="#FFFFFF")
+                
             self.execute_search()
 
         for display_text, actual_keyword in quick_tags:
-            lbl = tk.Label(tags_frame, text=display_text, bg="#e8e8e8", fg="#333333", font=("Segoe UI", 8, "bold"), padx=5, pady=2, cursor="hand2")
-            lbl.pack(side=tk.LEFT, padx=3)
-            lbl.bind("<Button-1>", lambda e, k=actual_keyword, w=lbl: toggle_tag(k, w))
-            def on_enter(e, w=lbl):
-                if w.cget("bg") == "#e8e8e8": w.config(bg="#d0d0d0")
-            def on_leave(e, w=lbl):
-                if w.cget("bg") == "#d0d0d0": w.config(bg="#e8e8e8")
-            lbl.bind("<Enter>", on_enter)
-            lbl.bind("<Leave>", on_leave)
-            self.tag_widgets[actual_keyword] = lbl
+            btn = ctk.CTkButton(tags_frame, text=display_text, height=24, width=10, border_width=2, fg_color="transparent", text_color=["#051728", "#FFFFFF"])
+            btn.pack(side=tk.LEFT, padx=3)
+            btn.configure(command=lambda k=actual_keyword, b=btn: toggle_tag(k, b))
+            self.tag_widgets[actual_keyword] = btn
             
         if hasattr(self, '_pending_initial_filters'):
             for kw in self._pending_initial_filters:
@@ -272,104 +299,102 @@ class LogViewerWindow:
                     toggle_tag(kw, self.tag_widgets[kw])
             self._pending_initial_filters = []
 
-        # --- DUAL BUTTON STRATEGY ---
         now = datetime.now()
         
-        # Group 1: Standard Horizontal Buttons
-        self.b1 = tk.Button(self.btn_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20)
-        self.b2 = tk.Button(self.btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), bg="#445566", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=20)
+        self.b1 = ctk.CTkButton(self.btn_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), width=160)
+        self.b2 = ctk.CTkButton(self.btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), width=150, fg_color=["#33424F", "#33424F"])
         
-        self.history_btn = tk.Menubutton(self.btn_frame, text="Archive", bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12, activebackground="#777777", activeforeground="white", cursor="hand2")
+        self.history_btn = ctk.CTkButton(self.btn_frame, text="Archive", width=100, fg_color=["#555555", "#555555"])
+        
         self.main_menu = tk.Menu(self.history_btn, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
-        self.history_btn.config(menu=self.main_menu)
         self.main_menu.add_command(label="Loading archives...", state="disabled") 
         threading.Thread(target=self._build_archive_menu_async, daemon=True).start()
 
-        self.b4 = tk.Button(self.btn_frame, text="Open in External Editor", command=self.open_external_file, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=22)
-        
-        apply_hover(self.b1, "#011528", "#022a52")
-        apply_hover(self.b2, "#445566", "#5d6d7e")
-        apply_hover(self.history_btn, "#555555", "#777777")
-        apply_hover(self.b4, "#217346", "#2a8f57")
+        def popup_archive_menu(event):
+            self.main_menu.post(event.widget.winfo_rootx(), event.widget.winfo_rooty() + event.widget.winfo_height())
+        self.history_btn.bind("<ButtonRelease-1>", popup_archive_menu)
 
+        self.b4 = ctk.CTkButton(self.btn_frame, text="Open in External Editor", command=self.open_external_file, width=170, fg_color="#217346", hover_color="#2a8f57")
+        
         self.b1.pack(side=tk.LEFT, padx=5)
         self.b2.pack(side=tk.LEFT, padx=5)
         self.history_btn.pack(side=tk.LEFT, padx=5)
         self.b4.pack(side=tk.LEFT, padx=5)
         
-        # Group 2: The Vertical Dropdown Frame
-        self.dropdown_frame = tk.Frame(self.viewer, bg="#ffffff", highlightthickness=2, highlightbackground="#cccccc")
+        self.dropdown_frame = ctk.CTkFrame(self.viewer, border_width=1, width=260)
+        self.dropdown_frame.pack_propagate(False)
         
-        self.d1 = tk.Button(self.dropdown_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), bg="#011528", fg="white", font=("Segoe UI", 10, "bold"), relief="flat")
-        self.d2 = tk.Button(self.dropdown_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), bg="#445566", fg="white", font=("Segoe UI", 10, "bold"), relief="flat")
-        
-        self.drop_history_btn = tk.Button(self.dropdown_frame, text="Archive", bg="#555555", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", activebackground="#777777", activeforeground="white", cursor="hand2")
-        
-        def popup_archive_menu(event):
-            self.main_menu.post(event.widget.winfo_rootx() + 150, event.widget.winfo_rooty())
-            
+        self.d1 = ctk.CTkButton(self.dropdown_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'))
+        self.d2 = ctk.CTkButton(self.dropdown_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), fg_color=["#33424F", "#33424F"])
+        self.drop_history_btn = ctk.CTkButton(self.dropdown_frame, text="Archive", fg_color=["#555555", "#555555"])
         self.drop_history_btn.bind("<ButtonRelease-1>", popup_archive_menu)
+        self.d4 = ctk.CTkButton(self.dropdown_frame, text="Open in External Editor", command=lambda: [self.force_close_menu(), self.open_external_file()], fg_color="#217346", hover_color="#2a8f57")
+
+        self.d1.pack(fill=tk.X, padx=10, pady=(10, 5))
+        self.d2.pack(fill=tk.X, padx=10, pady=5)
+        self.drop_history_btn.pack(fill=tk.X, padx=10, pady=5)
+        self.d4.pack(fill=tk.X, padx=10, pady=(5, 10))
+
+        style = ttk.Style(self.viewer)
+        style.theme_use("default")
         
-        self.d4 = tk.Button(self.dropdown_frame, text="Open in External Editor", command=lambda: [self.force_close_menu(), self.open_external_file()], bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat")
+        bg_color = self.viewer._apply_appearance_mode(["#FFFFFF", "#081E33"])
+        text_color = self.viewer._apply_appearance_mode(["#051728", "#FFFFFF"])
+        selected_color = self.viewer._apply_appearance_mode(["#00386C", "#0E8187"])
+        head_bg = self.viewer._apply_appearance_mode(["#F2F0EB", "#051728"])
+        head_hover = self.viewer._apply_appearance_mode(["#E2ECF5", "#0B2238"])
 
-        apply_hover(self.d1, "#011528", "#022a52")
-        apply_hover(self.d2, "#445566", "#5d6d7e")
-        apply_hover(self.drop_history_btn, "#555555", "#777777")
-        apply_hover(self.d4, "#217346", "#2a8f57")
+        style.configure("Treeview", background=bg_color, foreground=text_color, rowheight=28, fieldbackground=bg_color, borderwidth=0)
+        style.map('Treeview', background=[('selected', selected_color)])
+        style.configure("Treeview.Heading", background=head_bg, foreground=text_color, relief="flat", font=("Segoe UI", 10, "bold"))
+        style.map("Treeview.Heading", background=[('active', head_hover)])
 
-        self.d1.pack(fill=tk.X, padx=10, pady=(10, 5), ipady=3)
-        self.d2.pack(fill=tk.X, padx=10, pady=5, ipady=3)
-        self.drop_history_btn.pack(fill=tk.X, padx=10, pady=5, ipady=3)
-        self.d4.pack(fill=tk.X, padx=10, pady=(5, 10), ipady=3)
-
-        # --- DATA TABLE ---
-        columns = ("Date/Day", "Time", "Location", "Sample ID", "Requestor", "Functional Dept", "Project Number", "User")
+        columns = ("Date", "Time", "Location", "Sample ID", "Requestor", "Department", "Project Number", "User")
         self.tree = ttk.Treeview(self.viewer, columns=columns, show="headings", height=15)
         for col in columns: self.tree.heading(col, text=col)
         
-        # New carefully calculated widths to fit the 1000px window smoothly
-        self.tree.column("Date/Day", width=90, anchor=tk.CENTER)
-        self.tree.column("Time", width=80, anchor=tk.CENTER)
-        self.tree.column("Location", width=160, anchor=tk.CENTER)
-        self.tree.column("Sample ID", width=90, anchor=tk.CENTER)
+        self.tree.column("Date", width=95, anchor=tk.CENTER)
+        self.tree.column("Time", width=75, anchor=tk.CENTER)
+        self.tree.column("Location", width=220, anchor=tk.CENTER)
+        self.tree.column("Sample ID", width=85, anchor=tk.CENTER)
         self.tree.column("Requestor", width=140, anchor=tk.CENTER)
-        self.tree.column("Functional Dept", width=150, anchor=tk.CENTER) 
-        self.tree.column("Project Number", width=140, anchor=tk.CENTER) 
+        self.tree.column("Department", width=190, anchor=tk.CENTER) 
+        self.tree.column("Project Number", width=120, anchor=tk.CENTER) 
         self.tree.column("User", width=110, anchor=tk.CENTER)
 
-        scrollbar = ttk.Scrollbar(self.viewer, orient=tk.VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscroll=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar = ctk.CTkScrollbar(self.viewer, orientation="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=(0, 10))
         self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
 
-        self.tree.tag_configure('removed', foreground='#EF4444') 
-        self.tree.tag_configure('pending', foreground='#06B6D4') 
-        self.tree.tag_configure('system', foreground="#10B981")  
-        self.tree.tag_configure('overdue', foreground='#8B5CF6')
+        # --- TAG PRIORITY HIERARCHY ---
+        # The lowest in the code wins conflicts!
+        self.tree.tag_configure('system', foreground=self.viewer._apply_appearance_mode(["#10B981", "#09ce66"]))  
+        self.tree.tag_configure('pending', foreground=self.viewer._apply_appearance_mode(['#06B6D4', '#2EFAD9'])) 
+        self.tree.tag_configure('overdue', foreground=self.viewer._apply_appearance_mode(['#8B5CF6', '#a78bfa'])) # Purple overrides Cyan!
+        self.tree.tag_configure('removed', foreground=self.viewer._apply_appearance_mode(['#EF4444', '#ff6b6b'])) # Red overrides Everything!
 
-        # --- GLOBAL KEYBINDS ---
         self.last_refresh_time = 0
 
         def focus_search_bar(event):
             self.search_entry.focus_set()
-            self.search_entry.selection_range(0, tk.END) # Highlights existing text for quick typing
-            return "break" # Stops the OS from doing a default Ctrl+F action
+            self.search_entry.select_range(0, tk.END) 
+            return "break" 
 
         def handle_escape(event):
             self.search_var.set("")
             self.trigger_manual_search()
-            self.viewer.focus_set() # Removes the blinking cursor from the search box
+            self.viewer.focus_set() 
             return "break"
 
         def handle_f5(event):
             current_time = time.time()
-            if current_time - self.last_refresh_time > 1.0: # 1-second cooldown
+            if current_time - self.last_refresh_time > 1.0: 
                 self.last_refresh_time = current_time
                 self.execute_search()
             return "break"
 
         def handle_new_window(event):
-            # Asks the main tray application to safely spawn a new viewer
             if self.notify:
                 self.notify("OPEN_NEW_VIEWER") 
             return "break"
@@ -383,11 +408,10 @@ class LogViewerWindow:
         self.viewer.bind("<Control-c>", self.copy_selection)
         self.viewer.bind("<Control-C>", self.copy_selection)
 
-        tk.Label(self.viewer, text="Select a row and press [Ctrl+C] to copy data  |  [Ctrl+F] for Searching  |  [Esc] Clears your Search Bar  |  [Ctrl+N] for New Window  |  F5 for Manual Refresh", bg="#f4f4f4", fg="#666666", font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
+        ctk.CTkLabel(self.viewer, text="Select a row and press [Ctrl+C] to copy data  |  [Ctrl+F] for Searching  |  [Esc] Clears your Search Bar  |  [Ctrl+N] for New Window  |  F5 for Manual Refresh", text_color=["#666666", "#a0a0a0"], font=("Segoe UI", 11, "italic")).pack(side=tk.LEFT, padx=10, pady=(0, 5))
         self.viewer.bind("<Configure>", self.handle_window_resize)
 
     def handle_window_resize(self, event):
-        """Monitors the window width and hides/shows the horizontal buttons."""
         if event.widget == self.viewer:
             search_width = self.search_container.winfo_reqwidth()
             
@@ -411,25 +435,23 @@ class LogViewerWindow:
                     self.btn_frame.pack(side=tk.LEFT) 
 
     def toggle_hamburger_menu(self):
-        """Places the pre-built dropdown container safely over the data table."""
         if self.menu_is_open:
             self.dropdown_frame.place_forget()
-            if self.icon_menu: self.hamburger_btn.config(image=self.icon_menu, text="")
-            else: self.hamburger_btn.config(text="☰")
+            if self.icon_menu: self.hamburger_btn.configure(image=self.icon_menu, text="")
+            else: self.hamburger_btn.configure(text="☰")
             self.menu_is_open = False
         else:
             x_pos = 15
             y_pos = self.top_frame.winfo_y() + self.top_frame.winfo_height()
             
-            self.dropdown_frame.place(x=x_pos, y=y_pos, width=260)
+            self.dropdown_frame.place(x=x_pos, y=y_pos)
             self.dropdown_frame.lift() 
             
-            if self.icon_menu_close: self.hamburger_btn.config(image=self.icon_menu_close, text="")
-            else: self.hamburger_btn.config(text="✕")
+            if self.icon_menu_close: self.hamburger_btn.configure(image=self.icon_menu_close, text="")
+            else: self.hamburger_btn.configure(text="✕")
             self.menu_is_open = True
 
     def force_close_menu(self):
-        """Helper to ensure the menu auto-closes when an option is clicked."""
         if self.menu_is_open:
             self.toggle_hamburger_menu()
 
@@ -471,11 +493,11 @@ class LogViewerWindow:
 
         data_list = []
         for child in self.tree.get_children(''):
-            date_val = self.tree.set(child, 'Date/Day')
+            date_val = self.tree.set(child, 'Date')
             time_val = self.tree.set(child, 'Time')
             absolute_time = f"{date_val} {time_val}"
             
-            if col in ("Date/Day", "Time"):
+            if col in ("Date", "Time"):
                 primary_val = absolute_time
             else:
                 primary_val = self.tree.set(child, col)
@@ -485,10 +507,8 @@ class LogViewerWindow:
         def smart_sort_key(item):
             primary = str(item[0]).strip().lower()
             tie_breaker = str(item[1])
-            
             if primary.isdigit():
                 return (0, int(primary), tie_breaker)
-                    
             return (1, primary, tie_breaker)
 
         data_list.sort(key=smart_sort_key, reverse=reverse)
@@ -497,34 +517,36 @@ class LogViewerWindow:
             self.tree.move(child, '', index)
 
     def trigger_manual_search(self, event=None):
-        """Clears all active Quick Tags when the user performs a manual text search."""
         if hasattr(self, 'active_filters'):
             self.active_filters.clear()
         if hasattr(self, 'tag_widgets'):
             for lbl in self.tag_widgets.values():
-                lbl.config(bg="#e8e8e8", fg="#333333") # Reset to grey
+                lbl.configure(fg_color="transparent", text_color=["#051728", "#FFFFFF"])
+        
+        if self.search_var.get().strip() == "" and self.tab_memory:
+            self.current_tab[0], self.current_history_target[0], self.current_history_target[1] = self.tab_memory
+            self.tab_memory = None
                 
         self.execute_search()
 
     def execute_search(self, event=None):
         typed_query = self.search_var.get().strip()
         hidden_query = " ".join(self.active_filters)
-        
-        # Combine the visual search box with the hidden button filters
         full_query = f"{typed_query} {hidden_query}".strip()
         
         if not full_query:
-            if self.current_tab[0] == 'deep_search': 
-                self.current_tab[0] = 'inventory'
+            if self.tab_memory:
+                self.current_tab[0], self.current_history_target[0], self.current_history_target[1] = self.tab_memory
+                self.tab_memory = None
+            
             self.load_data(self.current_tab[0], "", year=self.current_history_target[0], month=self.current_history_target[1])
             return
         
-        # --- CONTEXT-AWARE ROUTING ---
-        if self.current_tab[0] == 'inventory':
-            self.load_data('inventory', full_query)
+        if self.current_tab[0] in ['inventory', 'history_specific']:
+            self.load_data(self.current_tab[0], full_query, year=self.current_history_target[0], month=self.current_history_target[1])
         else:
             self.tree.delete(*self.tree.get_children())
-            self.tree.insert("", tk.END, values=("", "", "⏳ SEARCHING SERVER...", full_query, "Awaiting API response...", "", ""))
+            self.tree.insert("", tk.END, values=("", "", "↻ SEARCHING SERVER...", full_query, "Awaiting API response...", "", ""))
             self.viewer.update_idletasks()
             threading.Thread(target=lambda: self.run_api_deep_search(full_query), daemon=True).start()
 
@@ -565,7 +587,6 @@ class LogViewerWindow:
     def load_data(self, source_type, search_query="", is_auto_refresh=False, year=None, month=None):
         if source_type == 'deep_search': return 
 
-        # Offload the slow network request to a background thread!
         threading.Thread(
             target=self._threaded_load_data, 
             args=(source_type, search_query, is_auto_refresh, year, month), 
@@ -575,7 +596,6 @@ class LogViewerWindow:
     def _threaded_load_data(self, source_type, search_query, is_auto_refresh, year, month):
         data = self.fetch_view_data(source=source_type, year=year, month=month, sort_col=self.current_sort_col, reverse=self.current_sort_reverse)
         
-        # Once the server replies, safely push the data back to the UI thread
         if self.viewer.winfo_exists():
             self.viewer.after(0, lambda: self._render_loaded_data(data, source_type, search_query, is_auto_refresh, year, month))
 
@@ -602,37 +622,64 @@ class LogViewerWindow:
         self.tree.delete(*self.tree.get_children())
         
         search_terms = [word.lower() for word in search_query.strip().split()]
+        
         filter_old = "old" in search_terms
         if filter_old: search_terms.remove("old")
+        
+        filter_today = "magic_today_filter" in search_terms
+        if filter_today: search_terms.remove("magic_today_filter")
+        
+        filter_me = "magic_me_filter" in search_terms
+        if filter_me: search_terms.remove("magic_me_filter")
         
         now = datetime.now()
         is_active_inventory = (source_type == 'inventory')
         
         for row in data:
+            loc_lower = str(row[2]).replace('LOC:', '').replace('LOC-', '').strip().lower()
+            
+            row_date = None
+            try:
+                row_date = datetime.strptime(str(row[0]).strip()[:10], "%Y-%m-%d")
+            except Exception: pass
+            
             is_old = False
-            if is_active_inventory:
-                try:
-                    if (now - datetime.strptime(str(row[0]), "%Y-%m-%d")).days >= 14:
-                        is_old = True
-                except Exception: pass
+            is_today = False
+            is_closed = 'closed' in loc_lower or 'removed' in loc_lower
+            
+            # --- THE NEW OLD-FILTER LOGIC ---
+            # Instead of looking for "14-day-old logs", the Old filter looks strictly at 
+            # the Active Inventory to find 14-day-old samples. Since closed items 
+            # are deleted from inventory, this is bulletproof!
+            if is_active_inventory and row_date:
+                if (now - row_date).days >= 14:
+                    is_old = True
+                    
+            if row_date and row_date.date() == now.date():
+                is_today = True
             
             if filter_old and not is_old: continue
+            if filter_today and not is_today: continue
+            
+            if filter_me:
+                if 'system' in loc_lower:
+                    continue 
+                row_str_lower = " ".join(str(cell).lower() for cell in row)
+                if self.current_user and self.current_user.lower() not in row_str_lower:
+                    continue
             
             row_str = " ".join(str(cell).lower() for cell in row)
             if search_terms and not all(term in row_str for term in search_terms): continue
             
             display_row = list(row)
-            clean_loc = str(display_row[2]).replace('LOC:', '').replace('LOC-', '').strip()
-            display_row[2] = clean_loc
+            display_row[2] = str(display_row[2]).replace('LOC:', '').replace('LOC-', '').strip()
             item_id = str(display_row[3]) if len(display_row) > 3 else ""
             
-            loc_lower = clean_loc.lower()
             row_tags = ()
-            
-            if 'closed' in loc_lower or 'removed' in loc_lower: row_tags = ('removed',)
+            if is_closed: row_tags = ('removed',)
+            elif 'system' in loc_lower: row_tags = ('system',)
             elif is_old: row_tags = ('overdue',)
             elif 'verification' in loc_lower or 'pending' in loc_lower: row_tags = ('pending',)
-            elif 'system' in loc_lower: row_tags = ('system',)
             
             inserted = self.tree.insert("", tk.END, text=item_id, values=display_row, tags=row_tags)
             if item_id and item_id in selected_ids:
@@ -643,7 +690,6 @@ class LogViewerWindow:
 
     def auto_refresh(self):
         if self.viewer.winfo_exists():
-            
             if self.current_tab[0] == 'inventory':
                 typed_query = self.search_var.get().strip()
                 hidden_query = " ".join(getattr(self, 'active_filters', set()))
@@ -664,7 +710,7 @@ class LogViewerWindow:
         self.viewer.clipboard_clear()
         self.viewer.clipboard_append("\n".join(copied_lines))
         self.notify(f"Copied {len(selected)} rows to clipboard" if len(selected) > 1 else "Copied 1 row to clipboard")
-        return "break"  # Stops event propagation and prevents duplicate firing
+        return "break" 
 
     def open_external_file(self):
         file_to_open = self.storage.get_active_file_path(

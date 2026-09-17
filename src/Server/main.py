@@ -1,4 +1,7 @@
 # main.py
+import customtkinter as ctk
+ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # THE MASTER FIX
+
 import tkinter as tk
 import threading
 import queue
@@ -16,16 +19,13 @@ from local_storage import CsvStorage
 from overlay import NotificationManager
 from server_api import LabTrackAPI
 
-
 message_queue = queue.Queue()
 
 def resource_path(file_name):
     try:
-        # COMPILED .exe MODE: PyInstaller extracts everything to the root of _MEIPASS
         base_path = sys._MEIPASS
         return os.path.join(base_path, file_name)
     except Exception:
-        # DEVELOPMENT MODE: Calculate path from this script (src/Client) up to the img folder
         script_dir = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(script_dir, "..", "..", "img", file_name)
 
@@ -64,7 +64,6 @@ def is_taskbar_dark_mode():
 
 state = {'autostart': is_autostart_enabled()}
 
-# Pass api_server into the tray setup!
 def setup_tray(root, api_server):
     try:
         if is_taskbar_dark_mode():
@@ -99,14 +98,10 @@ def setup_tray(root, api_server):
             time.sleep(2)
             if api_server:
                 count = api_server.get_active_client_count()
-                # 1. Update the hover text (No right-click needed!)
                 icon.title = f"Live Clients: {count} | LabTrack Server"
-                # 2. Force the right-click menu to visibly redraw!
                 icon.update_menu()
 
-    # Start the updater right before running the icon
     threading.Thread(target=tray_updater, daemon=True).start()
-
     icon.run()
 
 # --- FIRST LAUNCH SETUP LOGIC ---
@@ -114,7 +109,6 @@ SETTINGS_FILE = "server_settings.json"
 
 def get_master_directory():
     SETTINGS_FILE_PATH = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'server_settings.json')
-    """Checks for saved path. If missing or invalid, launches the Setup UI."""
     if os.path.exists(SETTINGS_FILE_PATH):
         try:
             with open(SETTINGS_FILE_PATH, 'r') as f:
@@ -125,44 +119,60 @@ def get_master_directory():
         except Exception:
             pass
 
-    # If we reach here, the path is missing or invalid. Launch Setup UI.
-    setup_root = tk.Tk()
+    theme_path = resource_path("BW_theme.json")
+    if os.path.exists(theme_path):
+        ctk.set_default_color_theme(theme_path)
+
+    setup_root = ctk.CTk()
     setup_root.title("Server Setup")
-    setup_root.geometry("450x220")
+    try:
+        setup_root.after(200, lambda: setup_root.iconbitmap(resource_path("icon_white.ico")))
+    except Exception: pass
     setup_root.overrideredirect(True)
-    setup_root.configure(bg="#ffffff", highlightthickness=2, highlightbackground="#011528")
+    
+    bg_color = "#051728" if ctk.get_appearance_mode() == "Dark" else "#F2F0EB"
+    border_color = "#0E8187" if ctk.get_appearance_mode() == "Dark" else "#00386C"
+    setup_root.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color)
     setup_root.attributes("-topmost", True)
 
+    # --- PURE MATH CENTERING ---
+    width, height = 450, 220
     setup_root.update_idletasks()
-    x = (setup_root.winfo_screenwidth() // 2) - (450 // 2)
-    y = (setup_root.winfo_screenheight() // 2) - (220 // 2)
-    setup_root.geometry(f'+{x}+{y}')
+    
+    screen_w = setup_root.winfo_screenwidth()
+    screen_h = setup_root.winfo_screenheight()
+    
+    x = int((screen_w / 2) - (width / 2))
+    y = int((screen_h / 2) - (height / 2))
+    
+    setup_root.geometry(f"{width}x{height}+{x}+{y}")
+    # ---------------------------
 
-    tk.Label(setup_root, text="Server Configuration", bg="#ffffff", fg="#011528", font=("Segoe UI", 16, "bold")).pack(pady=(20, 5))
-    tk.Label(setup_root, text="Master Database Directory not found.\nPlease select the folder to store inventory and logs.", bg="#ffffff", fg="#555555", font=("Segoe UI", 10)).pack(pady=(0, 15))
+    ctk.CTkLabel(setup_root, text="Server Configuration", font=("Segoe UI", 18, "bold")).pack(pady=(20, 5))
+    ctk.CTkLabel(setup_root, text="Master Database Directory not found.\nPlease select the folder to store inventory and logs.", font=("Segoe UI", 12)).pack(pady=(0, 15))
 
     path_var = tk.StringVar()
     
-    # By removing fill=tk.X, the frame shrinks to fit the entry and button, and centers automatically
-    input_frame = tk.Frame(setup_root, bg="#ffffff")
+    input_frame = ctk.CTkFrame(setup_root, fg_color="transparent")
     input_frame.pack(pady=(0, 5)) 
     
-    path_entry = tk.Entry(input_frame, textvariable=path_var, font=("Segoe UI", 10), state="readonly", width=32, relief="solid", bd=1)
-    path_entry.pack(side=tk.LEFT, ipady=4, padx=(0, 10))
+    path_entry = ctk.CTkEntry(input_frame, textvariable=path_var, font=("Segoe UI", 12), width=240)
+    path_entry.configure(state="disabled")
+    path_entry.pack(side=tk.LEFT, padx=(0, 10))
 
     def browse_folder():
         folder = filedialog.askdirectory(title="Select Master Directory")
         if folder:
+            path_entry.configure(state="normal")
             path_var.set(folder)
+            path_entry.configure(state="disabled")
 
-    tk.Button(input_frame, text="Browse...", command=browse_folder, bg="#aaaaaa", fg="white", font=("Segoe UI", 9, "bold"), relief="flat", width=10).pack(side=tk.LEFT)
+    ctk.CTkButton(input_frame, text="Browse...", command=browse_folder, fg_color="#aaaaaa", hover_color="#888888", font=("Segoe UI", 12, "bold"), width=80).pack(side=tk.LEFT)
 
     def save_and_start():
         selected_path = path_var.get()
         if selected_path and os.path.exists(selected_path):
-            # Ensure the directory exists in LocalAppData before saving the JSON
             os.makedirs(os.path.dirname(SETTINGS_FILE_PATH), exist_ok=True)
-            
             with open(SETTINGS_FILE_PATH, 'w') as f:
                 json.dump({"PARENT_FOLDER": selected_path}, f)
             setup_root.destroy()
@@ -173,48 +183,39 @@ def get_master_directory():
         setup_root.destroy()
         sys.exit(0)
 
-    btn_frame = tk.Frame(setup_root, bg="#ffffff")
+    btn_frame = ctk.CTkFrame(setup_root, fg_color="transparent")
     btn_frame.pack(pady=20)
-    tk.Button(btn_frame, text="Quit", command=cancel_setup, bg="#d9534f", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=12).pack(side=tk.LEFT, padx=10)
-    tk.Button(btn_frame, text="Save & Start", command=save_and_start, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", width=15).pack(side=tk.LEFT, padx=10)
+    ctk.CTkButton(btn_frame, text="Quit", command=cancel_setup, fg_color="#d9534f", hover_color="#c9302c", font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
+    ctk.CTkButton(btn_frame, text="Save & Start", command=save_and_start, fg_color=["#217346", "#09ce66"], hover_color=["#2a8f57", "#2EFAD9"], font=("Segoe UI", 12, "bold"), width=140).pack(side=tk.LEFT, padx=10)
 
     setup_root.mainloop()
-    
-    # After mainloop is destroyed, recursively call to verify and return the newly saved path
     return get_master_directory()
 
 if __name__ == "__main__":
-    # Unique lock name for the SERVER
     mutex_name = "Global\\LabTrackQR_Server_Instance_Lock"
     mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
     
-    # 183 is the Windows Error Code for ERROR_ALREADY_EXISTS
     if ctypes.windll.kernel32.GetLastError() == 183: 
-        err_root = tk.Tk()
+        err_root = ctk.CTk()
         err_root.withdraw()
         err_root.attributes("-topmost", True) 
         messagebox.showwarning(
             "LabTrack Server Already Running", 
             "The LabTrack Server is already running in the background!\n\nPlease check your system tray (near the clock) to access it."
         )
-        sys.exit(0) # Instantly kill this duplicate instance
+        sys.exit(0)
 
-    # 1. Ensure configuration exists
     parent_folder = get_master_directory()
     
-    # 2. Dynamically build the database paths
     save_path = os.path.join(parent_folder, "inventory.csv")
     employees_path = os.path.join(parent_folder, "employees.json")
     history_dir = os.path.join(parent_folder, "history_logs")
     
-    # 3. Initialize Master Storage with dynamic paths
     storage = CsvStorage(save_path, employees_path, history_dir, NETWORK_SYNC_PATH, SYNC_INTERVAL_SECONDS)
     
-    # 4. Start the Background Flask API Server
     api_server = LabTrackAPI(storage)
     api_server.start_server(host='0.0.0.0', port=5000)
 
-    # 5. Start the UI Dashboard
     app = NotificationManager(message_queue, storage, scanner_mgr=None)
     threading.Thread(target=setup_tray, args=(app.root, api_server), daemon=True).start()
     

@@ -1,11 +1,14 @@
 # overlay.py (SERVER VERSION)
-import tkinter as tk
+import customtkinter as ctk
+ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # THE MASTER FIX
+
 import sys
 import os
 import ctypes
+import tkinter as tk
 from PIL import Image, ImageTk
 from tkinter import ttk, messagebox
-from logviewer import LogViewerWindow # Uses the shared engine!
+from logviewer import LogViewerWindow
 
 try:
     myappid = 'labtrack.qr.desktop.app.server.1' 
@@ -22,17 +25,14 @@ def resource_path(file_name):
         return os.path.join(script_dir, "..", "..", "img", file_name)
 
 def get_theme_icon():
-    """Checks Windows Registry to see if the taskbar is in Light or Dark mode."""
     try:
         import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
         value, _ = winreg.QueryValueEx(key, "SystemUsesLightTheme")
         winreg.CloseKey(key)
-        # If SystemUsesLightTheme is 0, taskbar is DARK -> use white icon
-        # If SystemUsesLightTheme is 1, taskbar is LIGHT -> use black icon
         return "icon_white.ico" if value == 0 else "icon_black.ico"
     except Exception:
-        return "icon_white.ico" # Fallback just in case
+        return "icon_white.ico"
 
 class NotificationManager:
     def __init__(self, message_queue, storage=None, scanner_mgr=None):
@@ -42,7 +42,11 @@ class NotificationManager:
         self.active_notifications = []
         self.active_log_windows = []
         
-        self.root = tk.Tk()
+        theme_path = resource_path("BW_theme.json")
+        if os.path.exists(theme_path):
+            ctk.set_default_color_theme(theme_path)
+
+        self.root = ctk.CTk()
         try:
             self.root.iconbitmap(default=resource_path(get_theme_icon()))
         except Exception:
@@ -52,16 +56,31 @@ class NotificationManager:
         self.show_splash_screen() 
         self.root.after(4500, self.check_queue)
 
+    def _get_dynamic_colors(self):
+        bg_color = "#051728" if ctk.get_appearance_mode() == "Dark" else "#F2F0EB"
+        border_color = "#0E8187" if ctk.get_appearance_mode() == "Dark" else "#00386C"
+        return bg_color, border_color
+
+    # --- THE PURE MATH FIX ENGINE ---
+    def center_window(self, window, width, height):
+        window.update_idletasks()
+        
+        screen_w = window.winfo_screenwidth()
+        screen_h = window.winfo_screenheight()
+        
+        x = int((screen_w / 2) - (width / 2))
+        y = int((screen_h / 2) - (height / 2))
+        
+        window.geometry(f"{width}x{height}+{x}+{y}")
+    # --------------------------------
+
     def show_splash_screen(self):
         splash = tk.Toplevel(self.root)
         splash.overrideredirect(True)
         splash.configure(bg="#011528", highlightthickness=2, highlightbackground="#ffffff")
         splash.attributes("-topmost", True)
         
-        width, height = 400, 240
-        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.root.winfo_screenheight() // 2) - (height // 2)
-        splash.geometry(f"{width}x{height}+{x}+{y}")
+        self.center_window(splash, 400, 240)
         
         try:
             original_img = Image.open(resource_path("icon_white.ico"))
@@ -79,16 +98,9 @@ class NotificationManager:
         while not self.message_queue.empty():
             msg = self.message_queue.get()
             
-            if msg == "COMMAND:OPEN_LOG_VIEWER":
-                self.open_log_viewer()
-                continue
-                
-            if msg == "COMMAND:OPEN_USER_MANAGER":
-                self.open_user_manager()
-                continue
-                
-            if isinstance(msg, str) and msg.startswith("COMMAND:"):
-                continue
+            if msg == "COMMAND:OPEN_LOG_VIEWER": self.open_log_viewer(); continue
+            if msg == "COMMAND:OPEN_USER_MANAGER": self.open_user_manager(); continue
+            if isinstance(msg, str) and msg.startswith("COMMAND:"): continue
 
             if isinstance(msg, str):
                 clean_msg = msg.strip()
@@ -112,90 +124,102 @@ class NotificationManager:
             latest_viewer.focus_force()
             return
 
-        # Summons the shared LogViewerWindow and passes True for is_server
         viewer_instance = LogViewerWindow(self.root, self.storage, self.spawn_notification, is_server=True)
         self.active_log_windows.append(viewer_instance)
 
     def open_user_manager(self):
         if hasattr(self, 'user_mgr_win') and self.user_mgr_win and self.user_mgr_win.winfo_exists():
-            self.user_mgr_win.deiconify()               # 1. Un-minimize it if it's hidden
-            self.user_mgr_win.lift()                    # 2. Pull it up in the Tkinter stack
-            self.user_mgr_win.attributes('-topmost', True) # 3. Force Windows to put it over other apps
-            self.user_mgr_win.after(100, lambda: self.user_mgr_win.attributes('-topmost', False)) # 4. Drop the lock so it doesn't get stuck on top forever
-            self.user_mgr_win.focus_force()             # 5. Grab the keyboard cursor
+            self.user_mgr_win.deiconify()               
+            self.user_mgr_win.lift()                    
+            self.user_mgr_win.attributes('-topmost', True) 
+            self.user_mgr_win.after(100, lambda: self.user_mgr_win.attributes('-topmost', False)) 
+            self.user_mgr_win.focus_force()             
             return
 
-        win = tk.Toplevel(self.root)
+        win = ctk.CTkToplevel(self.root)
         self.user_mgr_win = win
         win.title("User Management Dashboard")
-        win.geometry("780x520")
-        win.configure(bg="#f4f4f4")
-        
-        # Background memory to track if we are fixing a typo in an existing ID
         win.current_editing_badge = None 
+        try:
+            win.after(200, lambda: win.iconbitmap(resource_path(get_theme_icon())))
+        except Exception: pass 
+        
+        self.center_window(win, 780, 520)
         
         try:
             hwnd = ctypes.windll.user32.GetParent(win.winfo_id())
             ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(ctypes.c_int(2)), 4)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(ctypes.c_int(0x00281501)), 4)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(ctypes.c_int(0x00FFFFFF)), 4)
+            if ctk.get_appearance_mode() == "Dark":
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(ctypes.c_int(0x00281501)), 4)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(ctypes.c_int(0x00FFFFFF)), 4)
+            else:
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(ctypes.c_int(0x00EBF0F2)), 4)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(ctypes.c_int(0x00281501)), 4)
         except Exception: pass
 
-        left_frame = tk.Frame(win, bg="#f4f4f4")
+        left_frame = ctk.CTkFrame(win, fg_color="transparent")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        right_frame = tk.Frame(win, bg="#ffffff", highlightthickness=1, highlightbackground="#cccccc", width=300)
+        right_frame = ctk.CTkFrame(win, width=320)
         right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+        right_frame.pack_propagate(False)
 
-        tk.Label(left_frame, text="Registered Employees", bg="#f4f4f4", font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0,5))
+        ctk.CTkLabel(left_frame, text="Registered Employees", font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold")).pack(anchor="w", pady=(0,5))
 
-        # 1. The Dynamic Employee List
+        style = ttk.Style(win)
+        style.theme_use("default")
+        bg_color = win._apply_appearance_mode(["#FFFFFF", "#081E33"])
+        text_color = win._apply_appearance_mode(["#051728", "#FFFFFF"])
+        selected_color = win._apply_appearance_mode(["#00386C", "#0E8187"])
+        head_bg = win._apply_appearance_mode(["#F2F0EB", "#051728"])
+        head_hover = win._apply_appearance_mode(["#E2ECF5", "#0B2238"])
+
+        style.configure("Treeview", background=bg_color, foreground=text_color, rowheight=28, fieldbackground=bg_color, borderwidth=0)
+        style.map('Treeview', background=[('selected', selected_color)])
+        style.configure("Treeview.Heading", background=head_bg, foreground=text_color, relief="flat", font=("Segoe UI", 10, "bold"))
+        style.map("Treeview.Heading", background=[('active', head_hover)])
+
         columns = ("Badge ID", "Full Name", "AD Login")
         tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=15)
         
-        # --- THE FIX: Clickable Sorting Headers! ---
         def sort_column(col, reverse):
             data_list = [(tree.set(child, col), child) for child in tree.get_children('')]
             data_list.sort(reverse=reverse, key=lambda x: x[0].lower())
             for index, (val, child) in enumerate(data_list):
                 tree.move(child, '', index)
-            # Switch the arrow direction for the next click
             tree.heading(col, command=lambda: sort_column(col, not reverse))
 
         for col in columns: 
             tree.heading(col, text=col, command=lambda c=col: sort_column(c, False))
-        # -------------------------------------------
 
         tree.column("Badge ID", width=90, anchor=tk.CENTER)
         tree.column("Full Name", width=180, anchor=tk.W)
         tree.column("AD Login", width=120, anchor=tk.W)
         tree.pack(fill=tk.BOTH, expand=True)
 
-        # 2. The Form Fields
-        tk.Label(right_frame, text="Employee Details", bg="#ffffff", font=("Segoe UI", 14, "bold"), fg="#011528").pack(pady=(15, 0))
+        ctk.CTkLabel(right_frame, text="Employee Details", font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold")).pack(pady=(15, 0))
         
-        # --- NEW: Dynamic Mode Indicator ---
-        mode_label = tk.Label(right_frame, text="Creating New User", bg="#ffffff", fg="#217346", font=("Segoe UI", 9, "bold italic"))
+        accent_color = "#09ce66" if ctk.get_appearance_mode() == "Dark" else "#217346"
+        # THE FIX: Converted font to CTkFont object to prevent "bold italic" crashes!
+        mode_label = ctk.CTkLabel(right_frame, text="Creating New User", text_color=accent_color, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold", slant="italic"))
         mode_label.pack(pady=(0, 15))
 
+        ctk.CTkLabel(right_frame, text="First Name:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=25)
+        entry_first = ctk.CTkEntry(right_frame, font=("Segoe UI", 13))
+        entry_first.pack(fill=tk.X, padx=25, pady=(2, 10))
 
-        tk.Label(right_frame, text="First Name:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
-        entry_first = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
-        entry_first.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
+        ctk.CTkLabel(right_frame, text="Last Name:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=25)
+        entry_last = ctk.CTkEntry(right_frame, font=("Segoe UI", 13))
+        entry_last.pack(fill=tk.X, padx=25, pady=(2, 10))
 
-        tk.Label(right_frame, text="Last Name:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
-        entry_last = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
-        entry_last.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
+        ctk.CTkLabel(right_frame, text="Badge ID (8 Digits):", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=25)
+        entry_badge = ctk.CTkEntry(right_frame, font=("Segoe UI", 13))
+        entry_badge.pack(fill=tk.X, padx=25, pady=(2, 10))
 
-        tk.Label(right_frame, text="Badge ID (8 Digits):", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
-        entry_badge = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
-        entry_badge.pack(fill=tk.X, padx=15, pady=(2, 10), ipady=3)
+        ctk.CTkLabel(right_frame, text="Windows AD Login:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=25)
+        entry_ad = ctk.CTkEntry(right_frame, font=("Segoe UI", 13))
+        entry_ad.pack(fill=tk.X, padx=25, pady=(2, 20))
 
-        tk.Label(right_frame, text="Windows AD Login:", bg="#ffffff", font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=15)
-        entry_ad = tk.Entry(right_frame, font=("Segoe UI", 11), relief="solid", bd=1)
-        entry_ad.pack(fill=tk.X, padx=15, pady=(2, 20), ipady=3)
-
-        # --- LOGIC & EVENTS ---
         def load_data():
             tree.delete(*tree.get_children())
             emps = self.storage.get_employees() if self.storage else {}
@@ -212,14 +236,11 @@ class NotificationManager:
             if b_id in emps:
                 data = emps[b_id]
                 
-                # Remember who we are editing!
                 win.current_editing_badge = b_id 
-                mode_label.config(text="Editing Existing User", fg="#f39c12")
+                mode_label.configure(text="Editing Existing User", text_color="#f39c12")
                 
-                # Now the badge ID is fully editable to fix typos!
                 entry_badge.delete(0, tk.END)
                 entry_badge.insert(0, b_id)
-
                 entry_first.delete(0, tk.END)
                 entry_first.insert(0, data.get("first_name", ""))
                 entry_last.delete(0, tk.END)
@@ -231,7 +252,7 @@ class NotificationManager:
 
         def prepare_new_user():
             win.current_editing_badge = None
-            mode_label.config(text="Creating New User", fg="#217346")
+            mode_label.configure(text="Creating New User", text_color=accent_color)
             
             entry_badge.delete(0, tk.END)
             entry_first.delete(0, tk.END)
@@ -253,11 +274,9 @@ class NotificationManager:
                 return
 
             if self.storage:
-                # --- THE FIX: Delete the old profile if they fixed a typo in the Badge ID ---
                 old_b_id = win.current_editing_badge
                 if old_b_id and old_b_id != b_id:
                     self.storage.delete_employee(old_b_id)
-                # ----------------------------------------------------------------------------
                 
                 self.storage.add_employee(b_id, f_name, l_name, ad_user)
                 self.spawn_notification(f"Saved Successfully:\n{f_name} {l_name}")
@@ -265,11 +284,9 @@ class NotificationManager:
                 prepare_new_user()
 
         def delete_user():
-            # Protect against empty deletions
             b_id = win.current_editing_badge or entry_badge.get().strip()
             if not b_id: return
             
-            # Safely fetch the user's real name directly from the database
             emps = self.storage.get_employees() if self.storage else {}
             full_name = emps.get(b_id, {}).get("full_name", "Unknown User")
             
@@ -280,13 +297,12 @@ class NotificationManager:
                     load_data()
                     prepare_new_user()
 
-        # 3. Action Buttons
-        btn_frame = tk.Frame(right_frame, bg="#ffffff")
-        btn_frame.pack(fill=tk.X, padx=15, pady=5)
+        btn_frame = ctk.CTkFrame(right_frame, fg_color="transparent")
+        btn_frame.pack(fill=tk.X, padx=25, pady=5)
 
-        tk.Button(btn_frame, text="Save / Update", command=save_user, bg="#217346", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(fill=tk.X, pady=3)
-        tk.Button(btn_frame, text="New User", command=prepare_new_user, bg="#aaaaaa", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(fill=tk.X, pady=3)
-        tk.Button(btn_frame, text="Delete User", command=delete_user, bg="#d9534f", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2").pack(fill=tk.X, pady=(25, 0))
+        ctk.CTkButton(btn_frame, text="Save / Update", command=save_user, fg_color=["#217346", "#09ce66"], hover_color=["#2a8f57", "#2EFAD9"], font=("Segoe UI", 12, "bold")).pack(fill=tk.X, pady=3)
+        ctk.CTkButton(btn_frame, text="New User", command=prepare_new_user, fg_color="#aaaaaa", hover_color="#888888", font=("Segoe UI", 12, "bold")).pack(fill=tk.X, pady=3)
+        ctk.CTkButton(btn_frame, text="Delete User", command=delete_user, fg_color="#d9534f", hover_color="#c9302c", font=("Segoe UI", 12, "bold")).pack(fill=tk.X, pady=(25, 0))
 
         load_data()
 
@@ -325,11 +341,16 @@ class NotificationManager:
         canvas.create_polygon(points, smooth=True, fill=color)
 
     def position_and_show(self, window):
+        window.update_idletasks()
+        window_width = 400
+        window_height = 100
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        x_pos = screen_width - 450
-        y_pos = (screen_height - 160) - (len(self.active_notifications) * 110)
-        window.geometry(f"400x100+{x_pos}+{y_pos}")
+        
+        x_pos = screen_width - window_width - 50
+        y_pos = (screen_height - window_height - 60) - (len(self.active_notifications) * (window_height + 10))
+        
+        window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
         self.active_notifications.append(window)
 
     def destroy_notification(self, window):
@@ -339,14 +360,18 @@ class NotificationManager:
             self.recalculate_positions()
 
     def recalculate_positions(self):
+        window_width = 400
+        window_height = 100
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        x_pos = screen_width - 450
-        base_y = screen_height - 160
+        
+        x_pos = screen_width - window_width - 50
+        base_y = screen_height - window_height - 60
+        
         for index, window in enumerate(self.active_notifications):
             if window.winfo_exists():
-                y_pos = base_y - (index * 110)
-                window.geometry(f"400x100+{x_pos}+{y_pos}")
+                y_pos = base_y - (index * (window_height + 10))
+                window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
 
     def run(self):
         self.root.mainloop()

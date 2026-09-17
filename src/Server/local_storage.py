@@ -21,12 +21,58 @@ class CsvStorage:
         if self.sync_path:
             threading.Thread(target=self._network_sync_loop, daemon=True).start()
 
+    # --- DATA SCRUBBING ENGINE ---
+    def _normalize_date(self, date_str):
+        """Forces Excel-corrupted dates back into YYYY-MM-DD format."""
+        date_str = str(date_str).strip()[:10]
+        if not date_str: return date_str
+        
+        # If it's already perfect, skip parsing
+        if len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
+            return date_str
+            
+        # If Excel mangled it, fix it!
+        for fmt in ("%d.%m.%Y", "%m/%d/%Y", "%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                dt = datetime.strptime(date_str, fmt)
+                return dt.strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+        return date_str 
+
+    def _scrub_file_dates(self, filepath):
+        """Silently opens a CSV and corrects all corrupted dates."""
+        try:
+            needs_rewrite = False
+            rows = []
+            with open(filepath, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f, delimiter=';')
+                header = next(reader, None)
+                if header: rows.append(header)
+                for r in reader:
+                    if len(r) > 0:
+                        original = r[0]
+                        fixed = self._normalize_date(original)
+                        if original != fixed:
+                            needs_rewrite = True
+                            r[0] = fixed
+                    rows.append(r)
+            if needs_rewrite:
+                with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
+                    writer = csv.writer(f, delimiter=';')
+                    writer.writerows(rows)
+        except Exception: pass
+    # -----------------------------
+
     def _ensure_files_exist(self):
         if not os.path.exists(self.inventory_file):
             with open(self.inventory_file, 'w', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f, delimiter=';')
-                # --- NEW SCHEMA HEADER ---
                 writer.writerow(["Date", "Time", "Location", "Sample ID", "Requestor", "Functional Dept", "Project Number", "User"])
+        else:
+            # Self-Heal on Startup!
+            self._scrub_file_dates(self.inventory_file)
+            
         if not os.path.exists(self.history_dir):
             os.makedirs(self.history_dir)
 
@@ -36,7 +82,7 @@ class CsvStorage:
 
     def get_active_file_path(self, file_type, year=None, month=None):
         if file_type == 'inventory':
-            return self.save_path
+            return self.inventory_file # THE FIX: Corrected variable name!
         else:
             if year and month:
                 target_year = year
@@ -71,7 +117,6 @@ class CsvStorage:
         history_file = os.path.join(year_dir, f"log_{month_str}.csv")
         location = location.replace('LOC:', '').replace('LOC-', '').strip()
         
-        # --- NEW 8 COLUMN ROW ---
         row = [date_str, time_str, location, sample_id, requestor, dept, project, user]
         
         if not os.path.exists(history_file):
@@ -155,7 +200,6 @@ class CsvStorage:
             except Exception: pass
         return False
 
-    # Renamed variable inside for client compatibility
     def get_sample_name(self, sample_id):
         with self.lock:
             try:
@@ -163,13 +207,11 @@ class CsvStorage:
                     reader = csv.reader(f, delimiter=';')
                     next(reader, None)
                     for row in reader:
-                        # Returns a nice combo of Requestor and Project for the UI confirmation popup!
                         if len(row) >= 7 and row[3] == sample_id: 
                             return f"Req: {row[4]} | Proj: {row[6]}"
             except Exception: pass
         return "Unknown Sample"
 
-    # --- UPDATED DATA PARSERS ---
     def save_data_async(self, location_id, sample_id, user, message_queue, requestor="N/A", dept="N/A", project="N/A", force_create=False):
         threading.Thread(target=self._save_data, args=(location_id, sample_id, user, message_queue, requestor, dept, project, force_create), daemon=True).start()
 
@@ -200,6 +242,10 @@ class CsvStorage:
                     header = next(reader, None)
                     if header: rows_to_keep.append(header)
                     for r in reader:
+                        if len(r) > 0:
+                            # Self-Heal row on read
+                            r[0] = self._normalize_date(r[0])
+                            
                         if len(r) >= 7 and r[3] == sample_id:
                             found_existing = True
                             if not force_create:
@@ -237,6 +283,10 @@ class CsvStorage:
                     header = next(reader, None)
                     if header: rows_to_keep.append(header)
                     for row in reader:
+                        if len(row) > 0:
+                            # Self-Heal row on read
+                            row[0] = self._normalize_date(row[0])
+                            
                         if len(row) > 6 and row[3] == sample_id: 
                             req, dept, proj = row[4], row[5], row[6]
                         else: 
@@ -246,7 +296,6 @@ class CsvStorage:
                     writer = csv.writer(f, delimiter=';')
                     writer.writerows(rows_to_keep)
                     
-                # Perfect alignment with the new columns
                 self._log_to_history("REQUEST CLOSED", sample_id, req, dept, proj, user)
             except Exception: pass
         if message_queue: message_queue.put(f"Removed: {sample_id}\nBy: {user}")

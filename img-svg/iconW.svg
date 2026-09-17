@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 32 32"
+   width="32"
+   height="32"
+   version="1.1"
+   id="svg31"
+   sodipodi:docname="icon.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs31" />
+  <sodipodi:namedview
+     id="namedview31"
+     pagecolor="#ffffff"
+     bordercolor="#999999"
+     borderopacity="1"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1">
+    <inkscape:page
+       x="0"
+       y="0"
+       width="32"
+       height="32"
+       id="page2"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <!-- Top-Left QR Eye -->
+  <rect
+     x="1"
+     y="1"
+     width="12"
+     height="12"
+     fill="none"
+     stroke="#ffffff"
+     stroke-width="2"
+     id="rect1" />
+  <rect
+     x="4"
+     y="4"
+     width="6"
+     height="6"
+     fill="#ffffff"
+     id="rect2" />
+  <!-- Top-Right QR Eye -->
+  <rect
+     x="19"
+     y="1"
+     width="12"
+     height="12"
+     fill="none"
+     stroke="#ffffff"
+     stroke-width="2"
+     id="rect3" />
+  <rect
+     x="22"
+     y="4"
+     width="6"
+     height="6"
+     fill="#ffffff"
+     id="rect4" />
+  <!-- Bottom-Left QR Eye -->
+  <rect
+     x="1"
+     y="19"
+     width="12"
+     height="12"
+     fill="none"
+     stroke="#ffffff"
+     stroke-width="2"
+     id="rect5" />
+  <rect
+     x="4"
+     y="22"
+     width="6"
+     height="6"
+     fill="#ffffff"
+     id="rect6" />
+  <!-- Dense QR Data Matrix -->
+  <!-- Top Gap -->
+  <rect
+     x="16"
+     y="0"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect7" />
+  <rect
+     x="14"
+     y="2"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect8" />
+  <rect
+     x="16"
+     y="6"
+     width="2"
+     height="4"
+     fill="#ffffff"
+     id="rect9" />
+  <rect
+     x="14"
+     y="10"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect10" />
+  <!-- Left Gap -->
+  <rect
+     x="0"
+     y="16"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect11" />
+  <rect
+     x="2"
+     y="14"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect12" />
+  <rect
+     x="6"
+     y="16"
+     width="4"
+     height="2"
+     fill="#ffffff"
+     id="rect13" />
+  <rect
+     x="12"
+     y="14"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect14" />
+  <!-- Main Bottom-Right Data Sector -->
+  <rect
+     x="16"
+     y="16"
+     width="4"
+     height="4"
+     fill="#ffffff"
+     id="rect15" />
+  <rect
+     x="22"
+     y="14"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect16" />
+  <rect
+     x="26"
+     y="16"
+     width="4"
+     height="2"
+     fill="#ffffff"
+     id="rect17" />
+  <rect
+     x="30"
+     y="14"
+     width="2"
+     height="6"
+     fill="#ffffff"
+     id="rect18" />
+  <rect
+     x="14"
+     y="22"
+     width="2"
+     height="4"
+     fill="#ffffff"
+     id="rect19" />
+  <rect
+     x="18"
+     y="22"
+     width="4"
+     height="2"
+     fill="#ffffff"
+     id="rect20" />
+  <rect
+     x="24"
+     y="20"
+     width="2"
+     height="4"
+     fill="#ffffff"
+     id="rect21" />
+  <rect
+     x="30"
+     y="20"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect22" />
+  <rect
+     x="20"
+     y="26"
+     width="4"
+     height="4"
+     fill="#ffffff"
+     id="rect23" />
+  <rect
+     x="28"
+     y="22"
+     width="4"
+     height="2"
+     fill="#ffffff"
+     id="rect24" />
+  <rect
+     x="30"
+     y="24"
+     width="2"
+     height="4"
+     fill="#ffffff"
+     id="rect25" />
+  <rect
+     x="26"
+     y="26"
+     width="2"
+     height="2"
+     fill="#ffffff"
+     id="rect26" />
+  <!-- Bottom/Right Edges -->
+  <rect
+     x="16"
+     y="28"
+     width="2"
+     height="4"
+     fill="#ffffff"
+     id="rect27" />
+  <rect
+     x="24"
+     y="28"
+     width="2"
+     height="4"
+     fill="#ffffff"
+     id="rect28" />
+  <rect
+     x="28"
+     y="28"
+     width="4"
+     height="2"
+     fill="#ffffff"
+     id="rect29" />
+  <rect
+     x="20"
+     y="30"
+     width="4"
+     height="2"
+     fill="#ffffff"
+     id="rect30" />
+  <rect
+     x="28"
+     y="30"
+     width="4"
+     height="2"
+     fill="#ffffff"
+     id="rect31" />
+</svg>

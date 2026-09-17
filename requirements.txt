@@ -4,7 +4,7 @@ pyserial>=3.5
 # System tray icon management
 pystray>=0.19.3
 
-# Image processing for the system tray icon
+# Image processing for the system tray icon & CTk
 Pillow>=10.0.0
 
 # Used for compiling the final .exe file
@@ -13,10 +13,12 @@ pyinstaller>=6.0.0
 # Safely lock the CSV file across multiple network clients
 filelock>=3.12.0
 
-# for qr code generation
+# QR code generation
 qrcode>=8.2
 
-# client to server synchornization 
+# Client to server synchronization & API
 flask>=3.1.3
-
 requests>=2.34.2
+
+# Modern UI Engine
+customtkinter>=5.2.2

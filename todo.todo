@@ -14,12 +14,22 @@
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 ✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
 ☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
+☐ Mapped storage??? like visualization of storage and where things are etc.
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
-☐ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) (https://github.com/avalon60/ctk_theme_builder) ??? @cancelled (6/13/2026, 2:21:16 AM)
-☐ graphical style revamp to fit BW thmx palette @low
-☐ dark/white theme @low (make sure icons are correct)
-☐ animate blinking for error and action reqiured popups @high 
-☐ mapped storage??? like visualization of storage and where things are etc. @low
+✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
+☐ animate blinking for error and action reqiured popups @low
+✔ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) ??? @today @done (9/17/2026, 2:55:49 PM)
+☐ dark/white theme switch (make sure icons and top bar colors are correct) @today
+☐ fix a bug when saving file corrupts it when saved with new records with polish characters inserted manually by editing .csv in history? on server only?? idk @critical 
+☐ fix relog old sample popup missing @high
+☐ close manage employee badges after successfull relogin @high
+☐ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again)
+tkinter to cutom tkinter elements changes:
+    ☐ manage employee badges, add new sample change from optionMenu to comboBox for search
+    ☐ removal mode cancel button change
+    ☐ splash screen dark/light theme
+    ☐ popups/notfication change style 
+    ☐ random texts change color to match theme
 ✔ Whole History Viewer (because rn you can only see actual month history) OPTIMIZATION NEEDED (server recives client queries) @critical @today @done (9/7/2026, 11:28:12 AM)
 ✔ deep search allowing to search for history of everything in the lab @done (9/7/2026, 11:27:49 AM)
 ✔ Log Viewer Search Filters and small rework (it has to be functional and more user friendly) @low @today @done (9/8/2026, 3:08:22 PM)
