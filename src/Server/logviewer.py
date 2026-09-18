@@ -344,7 +344,7 @@ class LogViewerWindow:
         head_bg = self.viewer._apply_appearance_mode(["#F2F0EB", "#051728"])
         head_hover = self.viewer._apply_appearance_mode(["#E2ECF5", "#0B2238"])
 
-        style.configure("Treeview", background=bg_color, foreground=text_color, rowheight=28, fieldbackground=bg_color, borderwidth=0)
+        style.configure("Treeview", background=bg_color, foreground=text_color, rowheight=28, fieldbackground=bg_color, borderwidth=1, bordercolor=selected_color, lightcolor=selected_color, darkcolor=selected_color)
         style.map('Treeview', background=[('selected', selected_color)])
         style.configure("Treeview.Heading", background=head_bg, foreground=text_color, relief="flat", font=("Segoe UI", 10, "bold"))
         style.map("Treeview.Heading", background=[('active', head_hover)])

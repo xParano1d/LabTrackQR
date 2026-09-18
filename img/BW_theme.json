@@ -1,13 +1,13 @@
 {
   "CTk": {
     "fg_color": [
-      "#FFFFFF",
+      "#fdfeff",
       "#051728"
     ]
   },
   "CTkToplevel": {
     "fg_color": [
-      "#FFFFFF",
+      "#fdfeff",
       "#051728"
     ]
   },
@@ -15,15 +15,15 @@
     "corner_radius": 4,
     "border_width": 0,
     "fg_color": [
-      "#F2F0EB",
+      "#f3f9fe",
       "#0B2238"
     ],
     "top_fg_color": [
-      "#FFFFFF",
+      "#fdfeff",
       "#051728"
     ],
     "border_color": [
-      "#F2F0EB",
+      "#f3f9fe",
       "#051728"
     ]
   },
@@ -31,19 +31,19 @@
     "corner_radius": 6,
     "border_width": 0,
     "fg_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "hover_color": [
-      "#73abdf",
+      "#00386C",
       "#2EFAD9"
     ],
     "border_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "text_color": [
-      "#FFFFFF",
+      "#fdfeff",
       "#FFFFFF"
     ],
     "text_color_disabled": [
@@ -72,11 +72,11 @@
     "corner_radius": 6,
     "border_width": 2,
     "fg_color": [
-      "#FFFFFF",
+      "#f3f9fe",
       "#081E33"
     ],
     "border_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "text_color": [
@@ -96,7 +96,7 @@
       "#0E8187"
     ],
     "border_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "hover_color": [
@@ -104,7 +104,7 @@
       "#2EFAD9"
     ],
     "checkmark_color": [
-      "#FFFFFF",
+      "#fdfeff",
       "#2EFAD9"
     ],
     "text_color": [
@@ -154,7 +154,7 @@
       "#2EFAD9"
     ],
     "border_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "hover_color": [
@@ -211,19 +211,19 @@
   "CTkOptionMenu": {
     "corner_radius": 6,
     "fg_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "button_color": [
-      "#00284D",
+      "#041728",
       "#0E8187"
     ],
     "button_hover_color": [
-      "#286094",
+      "#00386C",
       "#2EFAD9"
     ],
     "text_color": [
-      "#FFFFFF",
+      "#fdfeff",
       "#FFFFFF"
     ],
     "text_color_disabled": [
@@ -235,19 +235,19 @@
     "corner_radius": 4,
     "border_width": 2,
     "fg_color": [
-      "#FFFFFF",
+      "#f3f9fe",
       "#081E33"
     ],
     "border_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "button_color": [
-      "#00386C",
+      "#778a9b",
       "#0E8187"
     ],
     "button_hover_color": [
-      "#286094",
+      "#00386C",
       "#2EFAD9"
     ],
     "text_color": [
@@ -264,11 +264,11 @@
     "border_spacing": 4,
     "fg_color": "transparent",
     "button_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "button_hover_color": [
-      "#286094",
+      "#00386C",
       "#ffffff"
     ]
   },
@@ -280,19 +280,19 @@
       "#051728"
     ],
     "selected_color": [
-      "#144c80",
+      "#041728",
       "#0E8187"
     ],
     "selected_hover_color": [
-      "#73abdf",
+      "#00386C",
       "#2EFAD9"
     ],
     "unselected_color": [
-      "#FFFFFF",
+      "#f3f9fe",
       "#081E33"
     ],
     "unselected_hover_color": [
-      "#73abdf",
+      "#00386C",
       "#2EFAD9"
     ],
     "text_color": [
@@ -308,11 +308,11 @@
     "corner_radius": 4,
     "border_width": 2,
     "fg_color": [
-      "#F1EFEB",
+      "#f3f9fe",
       "#081E33"
     ],
     "border_color": [
-      "#00386C",
+      "#041728",
       "#2EFAD9"
     ],
     "text_color": [
@@ -320,11 +320,11 @@
       "#FFFFFF"
     ],
     "scrollbar_button_color": [
-      "#00386C",
+      "#041728",
       "#0E8187"
     ],
     "scrollbar_button_hover_color": [
-      "#286094",
+      "#00386C",
       "#2EFAD9"
     ]
   },
@@ -336,11 +336,11 @@
   },
   "DropdownMenu": {
     "fg_color": [
-      "#FFFFFF",
+      "#fdfeff",
       "#081E33"
     ],
     "hover_color": [
-      "#91c9fd",
+      "#C1DDF7",
       "#0E8187"
     ],
     "text_color": [
@@ -371,7 +371,7 @@
     "date created": "Sep 16 2026 09:06:19",
     "last modified by": "Filip Pelczarski",
     "created with": "CTk Theme Builder v3.3.3",
-    "last modified": "Sep 17 2026 14:49:35",
+    "last modified": "Sep 18 2026 12:34:31",
     "keystone colour": "#3c5064",
     "harmony method": "Split-complementary",
     "harmony differential": null

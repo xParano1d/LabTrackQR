@@ -13,22 +13,24 @@
 ✔ launch on windows startup option or by default @high @done (6/14/2026, 1:23:41 AM)
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 ✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
-☐ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe
-☐ Mapped storage??? like visualization of storage and where things are etc.
+✘ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe @cancelled (9/18/2026, 10:35:29 AM)
+☐ Mapped storage??? like visualization of storage and where things are etc. @critical 
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
+☐ dark/white theme switch (make sure icons and top bar colors are correct) @today
 ☐ animate blinking for error and action reqiured popups @low
 ✔ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) ??? @today @done (9/17/2026, 2:55:49 PM)
-☐ dark/white theme switch (make sure icons and top bar colors are correct) @today
-☐ fix a bug when saving file corrupts it when saved with new records with polish characters inserted manually by editing .csv in history? on server only?? idk @critical 
+✔ close manage employee badges after successfull relogin @low @done (9/18/2026, 12:13:56 PM)
 ☐ fix relog old sample popup missing @high
-☐ close manage employee badges after successfull relogin @high
-☐ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again)
+☐ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again) @high
+☐ fix a bug when saving file corrupts it when saved with new records with polish characters inserted manually by editing .csv in history? on server only?? idk @critical 
+☐ fix form validation red background for entries that are wrong
 tkinter to cutom tkinter elements changes:
-    ☐ manage employee badges, add new sample change from optionMenu to comboBox for search
-    ☐ removal mode cancel button change
-    ☐ splash screen dark/light theme
-    ☐ popups/notfication change style 
+    ✘ manage employee badges, add new sample change from optionMenu to comboBox for search and move func dept to bottom (above initialize sample button) @cancelled (9/18/2026, 12:06:07 PM)
+    ✔ removal mode cancel button change @done (9/18/2026, 1:47:51 PM)
+    ✔ splash screen dark/light theme @done (9/18/2026, 1:54:12 PM)
+    ✘ old sample popup close button @cancelled (9/18/2026, 1:55:01 PM)
+    ✔ popups/notfication change style @done (9/18/2026, 2:25:30 PM)
     ☐ random texts change color to match theme
 ✔ Whole History Viewer (because rn you can only see actual month history) OPTIMIZATION NEEDED (server recives client queries) @critical @today @done (9/7/2026, 11:28:12 AM)
 ✔ deep search allowing to search for history of everything in the lab @done (9/7/2026, 11:27:49 AM)
@@ -64,23 +66,18 @@ CLIENT:
     ✘ pop-up account synchronization (session sharing flask username = request.environ.get('REMOTE_USER') if username then login else access denied) @cancelled (9/3/2026, 11:22:53 AM)
     ✔ one and more login sessions handling @done (9/4/2026, 12:36:12 PM)
     ✔ automatic reloging to AD user after 5 min of inactivity after reloging user @done (9/4/2026, 1:09:53 PM)
-        
+☐ config variables expansion
 
         
 Excel data integration:
     ✔ restruct whole inventory and history logs with new columns headers and storage @today @done (9/15/2026, 1:53:35 PM)
     ☐ "materials laboratory request" fetch only and create samples automatically
     ☐ add duplicates prevention when adding automatically
-    ☐ qr printer automation if possible  
+    ✘ qr printer automation if possible @cancelled (9/18/2026, 10:05:45 AM)
     
-TESTING:
-    ☐ duplications (does they even occur in sample trace after scanning same things twice or offline moded 2 users connect to server and sends the same things twice)
-    ☐ connection (disconnect etc.)
-    ☐ offline mode and data queue
-    ☐ employees management (how fast or does it even update at all on client after editing/deleting)
-    ☐ multiple users working at the same time pulling requests simultaneously
-
 stuff to consider:
-☐ security regarding only one copy of logviewer that everyone has access to and could easly edit/delete/corrupt @critical
-☐ 6 digit sample id lock (WILL GEMS NUMBER EVER END? now its at 923939 meaning 76061 left????) @critical 
-☐ prepare instruction for scanner configuration @critical
+☐ security regarding only one copy of logviewer that everyone has access to and could easly edit/delete/corrupt
+    |___backup on labshare local folders (eg. C:/)
+☐ 6 digit sample id lock (WILL GEMS NUMBER EVER END? now its at 923939 meaning 76061 left????)
+    |___increase form to normal form for digits/letters etc. (-_()) @critical windows ad setup change 8 digits only
+☐ prepare instruction for scanner configuration and user manual @critical
