@@ -102,22 +102,30 @@ class NotificationManager:
         self.root.after(5000, self.send_heartbeat)
 
     def show_splash_screen(self):
+        # --- DYNAMIC THEME COLORS ---
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        bg_color = "#011528" if is_dark else "#F3F3F3"
+        border_color = "#ffffff" if is_dark else "#00386C"
+        text_color = "white" if is_dark else "#051728"
+        sub_text_color = "#9db2c6" if is_dark else "#4A5C6A"
+
         splash = tk.Toplevel(self.root)
         splash.overrideredirect(True)
-        splash.configure(bg="#011528", highlightthickness=2, highlightbackground="#ffffff")
+        splash.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color, highlightcolor=border_color)
         splash.attributes("-topmost", True)
         
         self.center_window(splash, 400, 240)
         
         try:
-            original_img = Image.open(resource_path("icon_white.ico"))
+            # Dynamically loads icon_white.ico or icon_black.ico!
+            original_img = Image.open(resource_path(get_theme_icon()))
             resized_img = original_img.resize((80, 80), Image.Resampling.LANCZOS)
             self.splash_logo = ImageTk.PhotoImage(resized_img)
-            tk.Label(splash, image=self.splash_logo, bg="#011528").pack(pady=(35, 0))
+            tk.Label(splash, image=self.splash_logo, bg=bg_color).pack(pady=(35, 0))
         except Exception: pass
 
-        tk.Label(splash, text="LabTrackQR", bg="#011528", fg="white", font=("Segoe UI", 26, "bold")).pack(pady=(5,0))
-        tk.Label(splash, text="Connecting to hardware & network...", bg="#011528", fg="#9db2c6", font=("Segoe UI", 11, "italic")).pack()
+        tk.Label(splash, text="LabTrackQR", bg=bg_color, fg=text_color, font=("Segoe UI", 26, "bold")).pack(pady=(5,0))
+        tk.Label(splash, text="Connecting to hardware & network...", bg=bg_color, fg=sub_text_color, font=("Segoe UI", 11, "italic")).pack()
         splash.after(2500, splash.destroy)
 
     def check_queue(self):
@@ -207,7 +215,7 @@ class NotificationManager:
         popup.title("Attention Required")
         popup.overrideredirect(True) 
         bg_color, border_color = self._get_dynamic_colors()
-        popup.configure(bg=bg_color, highlightthickness=2, highlightbackground="#d9534f") 
+        popup.configure(bg=bg_color, highlightthickness=2, highlightbackground="#d9534f", highlightcolor="#d9534f")
         popup.attributes('-topmost', True) 
         
         self.center_window(popup, 420, 180)
@@ -234,10 +242,10 @@ class NotificationManager:
         win.title("Switch User")
         win.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        win.configure(bg=bg_color, highlightthickness=2, highlightbackground="#f39c12")
+        win.configure(bg=bg_color, highlightthickness=2, highlightbackground="#f39c12", highlightcolor="#f39c12")
         win.attributes("-topmost", True)
 
-        self.center_window(win, 400, 220)
+        self.center_window(win, 400, 180)
 
         ctk.CTkLabel(win, text="Switch User?", text_color="#f39c12", font=("Segoe UI", 18, "bold")).pack(pady=(15, 2))
         ctk.CTkLabel(win, text=f"Do you want to log out the current user\nand log in as {new_user}?", font=("Segoe UI", 13)).pack(pady=2)
@@ -273,6 +281,9 @@ class NotificationManager:
             if is_temp_now: self.spawn_notification(f"Temp Login Active:\nWelcome {new_user}!\n(5m idle timer running)")
             else: self.spawn_notification(f"Login Successful:\nWelcome {new_user}!")
             win.destroy()
+            
+            if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
+                self.emp_dir_win.destroy()
 
         def cancel():
             if win.winfo_exists():
@@ -290,10 +301,10 @@ class NotificationManager:
         reg_win.title("Register New Employee")
         reg_win.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        reg_win.configure(bg=bg_color, highlightthickness=2, highlightbackground=["#217346", "#09ce66"][1 if ctk.get_appearance_mode() == "Dark" else 0])
+        reg_win.configure(bg=bg_color, highlightthickness=2, highlightbackground=["#217346", "#09ce66"][1 if ctk.get_appearance_mode() == "Dark" else 0], highlightcolor=["#217346", "#09ce66"][1 if ctk.get_appearance_mode() == "Dark" else 0])
         reg_win.attributes("-topmost", True)
 
-        self.center_window(reg_win, 450, 450)
+        self.center_window(reg_win, 390, 390)
         
         title_text = "Windows AD Setup" if ad_username else "New ID Card Detected"
         accent_color = "#09ce66" if ctk.get_appearance_mode() == "Dark" else "#217346"
@@ -363,10 +374,10 @@ class NotificationManager:
         manager.title("Employee Login Badges")
         manager.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        manager.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color)
+        manager.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color, highlightcolor=border_color)
         manager.attributes("-topmost", True)
 
-        self.center_window(manager, 540, 580)
+        self.center_window(manager, 440, 520)
 
         close_btn = ctk.CTkButton(manager, text="✕", width=30, height=30, fg_color="transparent", text_color=["#999999", "#888888"], hover_color=["#ffcccc", "#662222"], command=manager.destroy)
         close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
@@ -446,10 +457,10 @@ class NotificationManager:
         win.title("Removal Mode Active")
         win.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        win.configure(bg=bg_color, highlightthickness=4, highlightbackground="#d9534f")
+        win.configure(bg=bg_color, highlightthickness=4, highlightbackground="#d9534f", highlightcolor="#d9534f")
         win.attributes("-topmost", True)
 
-        self.center_window(win, 420, 200)
+        self.center_window(win, 350, 160)
 
         ctk.CTkLabel(win, text="Scanner is in Removal Mode", text_color="#d9534f", font=("Segoe UI", 16, "bold")).pack(pady=(20, 5))
         ctk.CTkLabel(win, text="Scan a sample's QR code to delete it.", font=("Segoe UI", 12)).pack(pady=5)
@@ -460,14 +471,14 @@ class NotificationManager:
             win.destroy()
             self.spawn_notification("Removal mode cancelled.")
 
-        ctk.CTkButton(win, text="Cancel", command=cancel, fg_color="#aaaaaa", hover_color="#888888", font=("Segoe UI", 12, "bold"), width=120).pack(pady=10)
+        ctk.CTkButton(win, text="Cancel", command=cancel, fg_color="#d9534f", hover_color="#c9302c", font=("Segoe UI", 12, "bold"), width=120).pack(pady=10)
 
     def open_removal_confirmation(self, sample_id, action_user, sample_name):
         win = tk.Toplevel(self.root)
         win.title("Confirm Removal")
         win.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        win.configure(bg=bg_color, highlightthickness=2, highlightbackground="#d9534f")
+        win.configure(bg=bg_color, highlightthickness=2, highlightbackground="#d9534f", highlightcolor="#d9534f")
         win.attributes("-topmost", True)
 
         self.center_window(win, 440, 280)
@@ -520,10 +531,10 @@ class NotificationManager:
         form.title("Manual Sample Entry")
         form.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        form.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color) 
+        form.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color, highlightcolor=border_color)
         form.attributes("-topmost", True)
 
-        self.center_window(form, 480, 560)
+        self.center_window(form, 400, 460)
 
         close_btn = ctk.CTkButton(form, text="✕", width=30, height=30, fg_color="transparent", text_color=["#999999", "#888888"], hover_color=["#ffcccc", "#662222"], command=form.destroy)
         close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
@@ -544,16 +555,37 @@ class NotificationManager:
         ctk.CTkLabel(form, text="Requestor Name", font=("Segoe UI", 12, "bold")).pack(pady=(5, 2))
         entry_req = ctk.CTkEntry(form, width=280, justify="center", font=("Segoe UI", 14))
         entry_req.pack(pady=5)
-        
-        ctk.CTkLabel(form, text="Functional Department", font=("Segoe UI", 12, "bold")).pack(pady=(5, 2))
-        dept_var = tk.StringVar()
-        combo_dept = ctk.CTkComboBox(form, variable=dept_var, state="readonly", font=("Segoe UI", 14), width=280, justify="center")
-        combo_dept.configure(values=("Customer Teams", "Engineering", "Global Materials Development", "Laboratories", "Quality", "Reman & Proto", "Technical Analysis"))
-        combo_dept.pack(pady=5)
 
         ctk.CTkLabel(form, text="Project Number", font=("Segoe UI", 12, "bold")).pack(pady=(5, 2))
         entry_proj = ctk.CTkEntry(form, width=280, justify="center", font=("Segoe UI", 14))
         entry_proj.pack(pady=5)
+        
+        ctk.CTkLabel(form, text="Functional Department", font=("Segoe UI", 12, "bold")).pack(pady=(5, 2))
+        dept_var = tk.StringVar()
+        combo_dept = ctk.CTkComboBox(form, variable=dept_var, state="readonly", font=("Segoe UI", 14), width=280, justify="center", button_hover_color=["#00386C","#2EFAD9"])
+        combo_dept.configure(values=("Customer Teams", "Engineering", "Global Materials Development", "Laboratories", "Quality", "Reman & Proto", "Technical Analysis"))
+        combo_dept.pack(pady=5)
+        
+        def fix_combo_hover(widget):
+            normal_color = widget.cget("button_color")
+            hover_color = widget.cget("button_hover_color")
+            
+            def on_enter(e): widget.configure(button_color=hover_color)
+            def on_leave(e): widget.configure(button_color=normal_color)
+            
+            # Bind the outer shell
+            widget.bind("<Enter>", on_enter)
+            widget.bind("<Leave>", on_leave)
+            
+            # The Fix: Bind the internal text box AND the internal arrow button directly!
+            if hasattr(widget, '_canvas'):
+                widget._canvas.bind("<Enter>", on_enter)
+                widget._canvas.bind("<Leave>", on_leave)
+            if hasattr(widget, '_entry'):
+                widget._entry.bind("<Enter>", on_enter)
+                widget._entry.bind("<Leave>", on_leave)
+
+        fix_combo_hover(combo_dept)
 
         ctk.CTkLabel(form, text="Active Session", font=("Segoe UI", 12, "bold")).pack(pady=(10, 2))
         
@@ -562,9 +594,7 @@ class NotificationManager:
         
         if len(active_users) == 1:
             selected_user.set(active_users[0])
-            user_frame = ctk.CTkFrame(form, fg_color=["#e8f4ea", "#1e3b2e"], border_width=1, border_color=accent_color, corner_radius=4)
-            user_frame.pack(pady=5, ipady=3, ipadx=10)
-            ctk.CTkLabel(user_frame, text=active_users[0], text_color=["#217346", "#09ce66"], font=("Segoe UI", 13, "bold"), width=240).pack()
+            ctk.CTkButton(form, text=active_users[0], text_color=["#217346", "#09ce66"], font=("Segoe UI", 13, "bold"), width=280, height=32,fg_color=["#e8f4ea", "#1e3b2e"], border_width=2, border_color=accent_color, corner_radius=4,hover=False).pack(pady=5)
         else:
             selected_user.set(active_users[0])
             combo_user = ctk.CTkComboBox(form, variable=selected_user, values=active_users, state="readonly", font=("Segoe UI", 13, "bold"), width=280, justify="center")
@@ -608,6 +638,7 @@ class NotificationManager:
 
         ctk.CTkButton(form, text="Initialize Item", command=save_manual_entry, font=("Segoe UI", 13, "bold"), width=180).pack(pady=(20, 20))
 
+    # --- ADVANCED NOTIFICATION ENGINE ---
     def spawn_notification(self, text):
         window = tk.Toplevel(self.root)
         window.overrideredirect(True)
@@ -616,31 +647,85 @@ class NotificationManager:
         window.wm_attributes("-transparentcolor", transparent_color)
         window.attributes("-topmost", True)
         
-        canvas = tk.Canvas(window, bg=transparent_color, highlightthickness=0, width=400, height=100)
-        canvas.pack()
-        self.draw_rounded_rect(canvas, 5, 5, 395, 95, radius=15, color="#011528")
-        
-        lines = text.split('\n')
-        if len(lines) == 3:
-            tk.Label(window, text=lines[0], fg="#9db2c6", bg="#011528", font=("Segoe UI", 9, "bold")).place(relx=0.5, rely=0.20, anchor="center")
-            tk.Label(window, text=lines[1], fg="#ffffff", bg="#011528", font=("Segoe UI", 12, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.50, anchor="center")
-            tk.Label(window, text=lines[2], fg="#cccccc", bg="#011528", font=("Segoe UI", 9)).place(relx=0.5, rely=0.80, anchor="center")
-        elif len(lines) == 2:
-            tk.Label(window, text=lines[0], fg="#9db2c6", bg="#011528", font=("Segoe UI", 9, "bold")).place(relx=0.5, rely=0.30, anchor="center")
-            tk.Label(window, text=lines[1], fg="#ffffff", bg="#011528", font=("Segoe UI", 13, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.65, anchor="center")
+        # 1. Semantic Analysis for Colors and Icons
+        text_lower = text.lower()
+        if any(w in text_lower for w in ["successful", "success", "saved", "registered"]):
+            theme_color = "#09ce66" # Green
+            icon_name = "check-circle"
+        elif any(w in text_lower for w in ["removed", "denied", "failed", "lost", "error"]):
+            theme_color = "#d9534f" # Red
+            icon_name = "warning"
+        elif any(w in text_lower for w in ["temp", "warning", "action", "attention"]):
+            theme_color = "#f39c12" # Orange
+            icon_name = "bell"
         else:
-            tk.Label(window, text=text, fg="#ffffff", bg="#011528", font=("Segoe UI", 12, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.5, anchor="center")
+            theme_color = "#0E8187" # Cyan
+            icon_name = "info-circle"
+            
+        bg_color = "#011528" if ctk.get_appearance_mode() == "Dark" else "#F3F3F3"
+        text_primary = "#ffffff" if ctk.get_appearance_mode() == "Dark" else "#051728"
+        text_secondary = "#aaaaaa" if ctk.get_appearance_mode() == "Dark" else "#666666"
+
+        # 2. Clean Corner Frame
+        main_frame = ctk.CTkFrame(window, fg_color=bg_color, corner_radius=12, border_width=2, border_color=theme_color)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        
+        top_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        top_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 5))
+
+        # 3. Dynamic Iconography
+        try:
+            from ctkfontawesome import icon_to_ctkimage
+            icon_img = icon_to_ctkimage(icon_name, fill=theme_color, scale_to_width=32)
+            icon_lbl = ctk.CTkLabel(top_frame, text="", image=icon_img, width=40)
+            icon_lbl.pack(side=tk.LEFT, padx=(5, 15))
+        except Exception:
+            icon_lbl = ctk.CTkLabel(top_frame, text="🔔", text_color=theme_color, font=("Segoe UI", 26), width=40)
+            icon_lbl.pack(side=tk.LEFT, padx=(5, 15))
+            
+        # 4. Text Layout
+        text_frame = ctk.CTkFrame(top_frame, fg_color="transparent")
+        text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        lines = text.split('\n')
+        title_text = lines[0]
+        
+        ctk.CTkLabel(text_frame, text=title_text, text_color=theme_color, font=("Segoe UI", 12, "bold"), anchor="w", justify="left").pack(fill=tk.X)
+        
+        if len(lines) == 3:
+            ctk.CTkLabel(text_frame, text=lines[1], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.X)
+            ctk.CTkLabel(text_frame, text=lines[2], text_color=text_secondary, font=("Segoe UI", 10), anchor="w", justify="left").pack(fill=tk.X)
+        elif len(lines) == 2:
+            ctk.CTkLabel(text_frame, text=lines[1], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.X)
+        else:
+            for widget in text_frame.winfo_children(): widget.destroy()
+            ctk.CTkLabel(text_frame, text=lines[0], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.BOTH, expand=True)
+
+        # 5. Lifespan Progress Bar
+        prog_bar = ctk.CTkProgressBar(main_frame, height=4, fg_color=bg_color, progress_color=theme_color, corner_radius=2)
+        prog_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=15, pady=(0, 10))
+        prog_bar.set(1.0)
         
         self.position_and_show(window)
-        window.after(6500, lambda: self.destroy_notification(window))
+        
+        # 6. Smooth Drain Animation Loop
+        duration_ms = 6500
+        step_ms = 50
+        steps = duration_ms // step_ms
+        window.current_step = 0
 
-    def draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius, color):
-        points = [
-            x1+radius, y1,  x2-radius, y1,  x2, y1,  x2, y1+radius,
-            x2, y2-radius,  x2, y2,  x2-radius, y2,  x1+radius, y2,
-            x1, y2,  x1, y2-radius,  x1, y1+radius,  x1, y1
-        ]
-        canvas.create_polygon(points, smooth=True, fill=color)
+        def update_progress():
+            if not window.winfo_exists(): return
+            window.current_step += 1
+            remaining = 1.0 - (window.current_step / steps)
+            if remaining <= 0:
+                self.destroy_notification(window)
+            else:
+                prog_bar.set(remaining)
+                window.after(step_ms, update_progress)
+
+        window.after(step_ms, update_progress)
+    # ----------------------------------------
 
     def position_and_show(self, window):
         window.update_idletasks()

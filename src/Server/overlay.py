@@ -61,7 +61,6 @@ class NotificationManager:
         border_color = "#0E8187" if ctk.get_appearance_mode() == "Dark" else "#00386C"
         return bg_color, border_color
 
-    # --- THE PURE MATH FIX ENGINE ---
     def center_window(self, window, width, height):
         window.update_idletasks()
         
@@ -72,26 +71,33 @@ class NotificationManager:
         y = int((screen_h / 2) - (height / 2))
         
         window.geometry(f"{width}x{height}+{x}+{y}")
-    # --------------------------------
 
     def show_splash_screen(self):
+        # --- DYNAMIC THEME COLORS ---
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        bg_color = "#011528" if is_dark else "#F3F3F3"
+        border_color = "#ffffff" if is_dark else "#00386C"
+        text_color = "white" if is_dark else "#051728"
+        sub_text_color = "#9db2c6" if is_dark else "#4A5C6A"
+
         splash = tk.Toplevel(self.root)
         splash.overrideredirect(True)
-        splash.configure(bg="#011528", highlightthickness=2, highlightbackground="#ffffff")
+        splash.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color)
         splash.attributes("-topmost", True)
         
         self.center_window(splash, 400, 240)
         
         try:
-            original_img = Image.open(resource_path("icon_white.ico"))
+            # Dynamically loads icon_white.ico or icon_black.ico!
+            original_img = Image.open(resource_path(get_theme_icon()))
             resized_img = original_img.resize((80, 80), Image.Resampling.LANCZOS)
             self.splash_logo = ImageTk.PhotoImage(resized_img)
-            tk.Label(splash, image=self.splash_logo, bg="#011528").pack(pady=(35, 0))
+            tk.Label(splash, image=self.splash_logo, bg=bg_color).pack(pady=(35, 0))
         except Exception:
             pass
 
-        tk.Label(splash, text="LabTrackQR", bg="#011528", fg="white", font=("Segoe UI", 26, "bold")).pack(pady=(5,0))
-        tk.Label(splash, text="SERVER", bg="#011528", fg="#9db2c6", font=("Segoe UI", 16, "italic bold")).pack(pady=(0,2))
+        tk.Label(splash, text="LabTrackQR", bg=bg_color, fg=text_color, font=("Segoe UI", 26, "bold")).pack(pady=(5,0))
+        tk.Label(splash, text="SERVER", bg=bg_color, fg=sub_text_color, font=("Segoe UI", 16, "italic bold")).pack(pady=(0,2))
         splash.after(2500, splash.destroy)
 
     def check_queue(self):
@@ -200,7 +206,6 @@ class NotificationManager:
         ctk.CTkLabel(right_frame, text="Employee Details", font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold")).pack(pady=(15, 0))
         
         accent_color = "#09ce66" if ctk.get_appearance_mode() == "Dark" else "#217346"
-        # THE FIX: Converted font to CTkFont object to prevent "bold italic" crashes!
         mode_label = ctk.CTkLabel(right_frame, text="Creating New User", text_color=accent_color, font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold", slant="italic"))
         mode_label.pack(pady=(0, 15))
 
@@ -306,6 +311,7 @@ class NotificationManager:
 
         load_data()
 
+    # --- ADVANCED NOTIFICATION ENGINE ---
     def spawn_notification(self, text):
         window = tk.Toplevel(self.root)
         window.overrideredirect(True)
@@ -314,31 +320,85 @@ class NotificationManager:
         window.wm_attributes("-transparentcolor", transparent_color)
         window.attributes("-topmost", True)
         
-        canvas = tk.Canvas(window, bg=transparent_color, highlightthickness=0, width=400, height=100)
-        canvas.pack()
-        self.draw_rounded_rect(canvas, 5, 5, 395, 95, radius=15, color="#011528")
-        
-        lines = text.split('\n')
-        if len(lines) == 3:
-            tk.Label(window, text=lines[0], fg="#9db2c6", bg="#011528", font=("Segoe UI", 9, "bold")).place(relx=0.5, rely=0.20, anchor="center")
-            tk.Label(window, text=lines[1], fg="#ffffff", bg="#011528", font=("Segoe UI", 12, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.50, anchor="center")
-            tk.Label(window, text=lines[2], fg="#cccccc", bg="#011528", font=("Segoe UI", 9)).place(relx=0.5, rely=0.80, anchor="center")
-        elif len(lines) == 2:
-            tk.Label(window, text=lines[0], fg="#9db2c6", bg="#011528", font=("Segoe UI", 9, "bold")).place(relx=0.5, rely=0.30, anchor="center")
-            tk.Label(window, text=lines[1], fg="#ffffff", bg="#011528", font=("Segoe UI", 13, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.65, anchor="center")
+        # 1. Semantic Analysis for Colors and Icons
+        text_lower = text.lower()
+        if any(w in text_lower for w in ["successful", "success", "saved", "registered"]):
+            theme_color = "#09ce66" # Green
+            icon_name = "check-circle"
+        elif any(w in text_lower for w in ["removed", "denied", "failed", "lost", "error"]):
+            theme_color = "#d9534f" # Red
+            icon_name = "warning"
+        elif any(w in text_lower for w in ["temp", "warning", "action", "attention"]):
+            theme_color = "#f39c12" # Orange
+            icon_name = "bell"
         else:
-            tk.Label(window, text=text, fg="#ffffff", bg="#011528", font=("Segoe UI", 12, "bold"), wraplength=380, justify="center").place(relx=0.5, rely=0.5, anchor="center")
+            theme_color = "#0E8187" # Cyan
+            icon_name = "info-circle"
+            
+        bg_color = "#011528" if ctk.get_appearance_mode() == "Dark" else "#F3F3F3"
+        text_primary = "#ffffff" if ctk.get_appearance_mode() == "Dark" else "#051728"
+        text_secondary = "#aaaaaa" if ctk.get_appearance_mode() == "Dark" else "#666666"
+
+        # 2. Clean Corner Frame
+        main_frame = ctk.CTkFrame(window, fg_color=bg_color, corner_radius=12, border_width=2, border_color=theme_color)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        
+        top_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        top_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 5))
+
+        # 3. Dynamic Iconography
+        try:
+            from ctkfontawesome import icon_to_ctkimage
+            icon_img = icon_to_ctkimage(icon_name, fill=theme_color, scale_to_width=32)
+            icon_lbl = ctk.CTkLabel(top_frame, text="", image=icon_img, width=40)
+            icon_lbl.pack(side=tk.LEFT, padx=(5, 15))
+        except Exception:
+            icon_lbl = ctk.CTkLabel(top_frame, text="🔔", text_color=theme_color, font=("Segoe UI", 26), width=40)
+            icon_lbl.pack(side=tk.LEFT, padx=(5, 15))
+            
+        # 4. Text Layout
+        text_frame = ctk.CTkFrame(top_frame, fg_color="transparent")
+        text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        lines = text.split('\n')
+        title_text = lines[0]
+        
+        ctk.CTkLabel(text_frame, text=title_text, text_color=theme_color, font=("Segoe UI", 12, "bold"), anchor="w", justify="left").pack(fill=tk.X)
+        
+        if len(lines) == 3:
+            ctk.CTkLabel(text_frame, text=lines[1], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.X)
+            ctk.CTkLabel(text_frame, text=lines[2], text_color=text_secondary, font=("Segoe UI", 10), anchor="w", justify="left").pack(fill=tk.X)
+        elif len(lines) == 2:
+            ctk.CTkLabel(text_frame, text=lines[1], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.X)
+        else:
+            for widget in text_frame.winfo_children(): widget.destroy()
+            ctk.CTkLabel(text_frame, text=lines[0], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.BOTH, expand=True)
+
+        # 5. Lifespan Progress Bar
+        prog_bar = ctk.CTkProgressBar(main_frame, height=4, fg_color=bg_color, progress_color=theme_color, corner_radius=2)
+        prog_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=15, pady=(0, 10))
+        prog_bar.set(1.0)
         
         self.position_and_show(window)
-        window.after(6500, lambda: self.destroy_notification(window))
+        
+        # 6. Smooth Drain Animation Loop
+        duration_ms = 6500
+        step_ms = 50
+        steps = duration_ms // step_ms
+        window.current_step = 0
 
-    def draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius, color):
-        points = [
-            x1+radius, y1,  x2-radius, y1,  x2, y1,  x2, y1+radius,
-            x2, y2-radius,  x2, y2,  x2-radius, y2,  x1+radius, y2,
-            x1, y2,  x1, y2-radius,  x1, y1+radius,  x1, y1
-        ]
-        canvas.create_polygon(points, smooth=True, fill=color)
+        def update_progress():
+            if not window.winfo_exists(): return
+            window.current_step += 1
+            remaining = 1.0 - (window.current_step / steps)
+            if remaining <= 0:
+                self.destroy_notification(window)
+            else:
+                prog_bar.set(remaining)
+                window.after(step_ms, update_progress)
+
+        window.after(step_ms, update_progress)
+    # ----------------------------------------
 
     def position_and_show(self, window):
         window.update_idletasks()
