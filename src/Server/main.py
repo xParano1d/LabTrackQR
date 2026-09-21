@@ -75,9 +75,20 @@ def setup_tray(root, api_server):
 
     def trigger_log_viewer(icon, item): message_queue.put("COMMAND:OPEN_LOG_VIEWER")
     def trigger_user_manager(icon, item): message_queue.put("COMMAND:OPEN_USER_MANAGER")
+    
+    def toggle_theme(icon, item):
+        current_mode = ctk.get_appearance_mode()
+        new_mode = "Light" if current_mode == "Dark" else "Dark"
+        ctk.set_appearance_mode(new_mode)
+        icon.update_menu() # Forces the tray text to refresh instantly!
+
+    def get_theme_text(item):
+        return "Change theme to Light" if ctk.get_appearance_mode() == "Dark" else "Change theme to Dark"
+
     def toggle_autostart(icon, item):
         state['autostart'] = not state['autostart']
         set_autostart(state['autostart'])
+
     def on_quit(icon, item):
         icon.stop()
         root.quit()
@@ -88,6 +99,7 @@ def setup_tray(root, api_server):
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Employees Management", trigger_user_manager),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem(get_theme_text, toggle_theme),
         pystray.MenuItem("Run on Windows Startup", toggle_autostart, checked=lambda item: state['autostart']),
         pystray.MenuItem("Quit Server", on_quit)
     )
@@ -136,7 +148,7 @@ def get_master_directory():
     setup_root.attributes("-topmost", True)
 
     # --- PURE MATH CENTERING ---
-    width, height = 450, 220
+    width, height = 430, 210
     setup_root.update_idletasks()
     
     screen_w = setup_root.winfo_screenwidth()
@@ -167,7 +179,7 @@ def get_master_directory():
             path_var.set(folder)
             path_entry.configure(state="disabled")
 
-    ctk.CTkButton(input_frame, text="Browse...", command=browse_folder, fg_color="#aaaaaa", hover_color="#888888", font=("Segoe UI", 12, "bold"), width=80).pack(side=tk.LEFT)
+    ctk.CTkButton(input_frame, text="Browse...", command=browse_folder, fg_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"], hover_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"], font=("Segoe UI", 12, "bold"), width=80).pack(side=tk.LEFT)
 
     def save_and_start():
         selected_path = path_var.get()

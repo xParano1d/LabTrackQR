@@ -21,16 +21,22 @@
 ☐ animate blinking for error and action reqiured popups @low
 ✔ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) ??? @today @done (9/17/2026, 2:55:49 PM)
 ✔ close manage employee badges after successfull relogin @low @done (9/18/2026, 12:13:56 PM)
-☐ fix relog old sample popup missing @high
-☐ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again) @high
+☐ too fast scan of location->smp takes smp:{id} string to location name @critical 
 ☐ fix a bug when saving file corrupts it when saved with new records with polish characters inserted manually by editing .csv in history? on server only?? idk @critical 
-☐ fix form validation red background for entries that are wrong
+☐ fix relog old sample popup missing @high
+☐ fix old sample notification coming up AGAIN after a while
+☐ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again) @high
+☐ fix form validation red background for entries that are wrong @low
+☐ fix bug with removal mode being bypassed by scanning sample not from system or wrong qr code and popup cancel message needs to be edited
+☐ fix no clearance popup when scanning only location and wrong popup count with all this setup and different combinations
 tkinter to cutom tkinter elements changes:
     ✘ manage employee badges, add new sample change from optionMenu to comboBox for search and move func dept to bottom (above initialize sample button) @cancelled (9/18/2026, 12:06:07 PM)
     ✔ removal mode cancel button change @done (9/18/2026, 1:47:51 PM)
     ✔ splash screen dark/light theme @done (9/18/2026, 1:54:12 PM)
     ✘ old sample popup close button @cancelled (9/18/2026, 1:55:01 PM)
-    ✔ popups/notfication change style @done (9/18/2026, 2:25:30 PM)
+    ✔ popups/notfication change style @today @done (9/21/2026, 11:00:26 AM)
+    ✔ make every color fetched from BW_theme.json to make it more responsive to theme changes @done (9/21/2026, 11:22:30 AM)
+    ✔ manage employees fix combo box broken color change on button hover @done (9/21/2026, 11:44:46 AM)
     ☐ random texts change color to match theme
 ✔ Whole History Viewer (because rn you can only see actual month history) OPTIMIZATION NEEDED (server recives client queries) @critical @today @done (9/7/2026, 11:28:12 AM)
 ✔ deep search allowing to search for history of everything in the lab @done (9/7/2026, 11:27:49 AM)

@@ -36,6 +36,25 @@ def get_theme_icon():
     except Exception:
         return "icon_white.ico"
 
+def fix_combo_hover(widget):
+    normal_color = widget.cget("button_color")
+    hover_color = widget.cget("button_hover_color")
+    
+    def on_enter(e): widget.configure(button_color=hover_color)
+    def on_leave(e): widget.configure(button_color=normal_color)
+    
+    # Bind the outer shell
+    widget.bind("<Enter>", on_enter)
+    widget.bind("<Leave>", on_leave)
+    
+    # The Fix: Bind the internal text box AND the internal arrow button directly!
+    if hasattr(widget, '_canvas'):
+        widget._canvas.bind("<Enter>", on_enter)
+        widget._canvas.bind("<Leave>", on_leave)
+    if hasattr(widget, '_entry'):
+        widget._entry.bind("<Enter>", on_enter)
+        widget._entry.bind("<Leave>", on_leave)
+
 class NotificationManager:
     def __init__(self, message_queue, storage=None, scanner_mgr=None):
         self.message_queue = message_queue
@@ -64,8 +83,9 @@ class NotificationManager:
         self.root.after(5000, self.send_heartbeat)
 
     def _get_dynamic_colors(self):
-        bg_color = "#051728" if ctk.get_appearance_mode() == "Dark" else "#F2F0EB"
-        border_color = "#0E8187" if ctk.get_appearance_mode() == "Dark" else "#00386C"
+        mode = 1 if ctk.get_appearance_mode() == "Dark" else 0
+        bg_color = ctk.ThemeManager.theme["CTk"]["fg_color"][mode]
+        border_color = ctk.ThemeManager.theme["CTkFrame"]["border_color"][mode]
         return bg_color, border_color
 
     def center_window(self, window, width, height):
@@ -96,7 +116,7 @@ class NotificationManager:
                         self.storage.is_offline_mode = True
                         import winsound
                         winsound.MessageBeep(winsound.MB_ICONHAND)
-                        self.message_queue.put("⚠️ CONNECTION LOST ⚠️\nSwitched to Offline Mode.\nData will be saved locally.")
+                        self.message_queue.put("CONNECTION LOST\nSwitched to Offline Mode.\nData will be saved locally.")
 
             threading.Thread(target=ping_server, daemon=True).start()
         self.root.after(5000, self.send_heartbeat)
@@ -111,7 +131,7 @@ class NotificationManager:
 
         splash = tk.Toplevel(self.root)
         splash.overrideredirect(True)
-        splash.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color, highlightcolor=border_color)
+        splash.configure(bg=bg_color, highlightthickness=4, highlightbackground=border_color, highlightcolor=border_color)
         splash.attributes("-topmost", True)
         
         self.center_window(splash, 400, 240)
@@ -215,13 +235,13 @@ class NotificationManager:
         popup.title("Attention Required")
         popup.overrideredirect(True) 
         bg_color, border_color = self._get_dynamic_colors()
-        popup.configure(bg=bg_color, highlightthickness=2, highlightbackground="#d9534f", highlightcolor="#d9534f")
+        popup.configure(bg=bg_color, highlightthickness=3, highlightbackground="#d9534f", highlightcolor="#d9534f")
         popup.attributes('-topmost', True) 
         
         self.center_window(popup, 420, 180)
         popup.protocol("WM_DELETE_WINDOW", lambda: None)
         
-        ctk.CTkLabel(popup, text="⚠️ Action Required ⚠️", text_color="#d9534f", font=("Segoe UI", 18, "bold")).pack(pady=(25, 5))
+        ctk.CTkLabel(popup, text="Action Required", text_color="#d9534f", font=("Segoe UI", 18, "bold")).pack(pady=(25, 5))
         ctk.CTkLabel(popup, text=f"You currently have {count} samples left unattended\nin the system for over 14 days.", font=("Segoe UI", 13)).pack(pady=10)
         
         def open_viewer():
@@ -242,7 +262,7 @@ class NotificationManager:
         win.title("Switch User")
         win.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        win.configure(bg=bg_color, highlightthickness=2, highlightbackground="#f39c12", highlightcolor="#f39c12")
+        win.configure(bg=bg_color, highlightthickness=3, highlightbackground="#f39c12", highlightcolor="#f39c12")
         win.attributes("-topmost", True)
 
         self.center_window(win, 400, 180)
@@ -294,14 +314,14 @@ class NotificationManager:
         btn_frame = ctk.CTkFrame(win, fg_color="transparent")
         btn_frame.pack(pady=5)
         ctk.CTkButton(btn_frame, text="Yes, Switch", command=confirm, fg_color="#f39c12", hover_color="#d68910", font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
-        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color="#aaaaaa", hover_color="#888888", font=("Segoe UI", 12, "bold"), width=100).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"], hover_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"], font=("Segoe UI", 12, "bold"), width=100).pack(side=tk.LEFT, padx=10)
 
     def open_register_badge(self, badge_id=None, ad_username=""):
         reg_win = tk.Toplevel(self.root)
         reg_win.title("Register New Employee")
         reg_win.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        reg_win.configure(bg=bg_color, highlightthickness=2, highlightbackground=["#217346", "#09ce66"][1 if ctk.get_appearance_mode() == "Dark" else 0], highlightcolor=["#217346", "#09ce66"][1 if ctk.get_appearance_mode() == "Dark" else 0])
+        reg_win.configure(bg=bg_color, highlightthickness=3, highlightbackground=["#217346", "#09ce66"][1 if ctk.get_appearance_mode() == "Dark" else 0], highlightcolor=["#217346", "#09ce66"][1 if ctk.get_appearance_mode() == "Dark" else 0])
         reg_win.attributes("-topmost", True)
 
         self.center_window(reg_win, 390, 390)
@@ -359,7 +379,7 @@ class NotificationManager:
             
         btn_frame = ctk.CTkFrame(reg_win, fg_color="transparent")
         btn_frame.pack(pady=20)
-        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color="#aaaaaa", hover_color="#888888", font=("Segoe UI", 12, "bold"), width=100).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"], hover_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"], font=("Segoe UI", 12, "bold"), width=100).pack(side=tk.LEFT, padx=10)
         ctk.CTkButton(btn_frame, text="Assign & Save", command=save_badge, fg_color=["#217346", "#09ce66"], hover_color=["#2a8f57", "#2EFAD9"], font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
 
     def open_employee_directory(self):
@@ -374,7 +394,9 @@ class NotificationManager:
         manager.title("Employee Login Badges")
         manager.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        manager.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color, highlightcolor=border_color)
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        border_color = "#ffffff" if is_dark else "#041728"
+        manager.configure(bg=bg_color, highlightthickness=3, highlightbackground=border_color, highlightcolor=border_color)
         manager.attributes("-topmost", True)
 
         self.center_window(manager, 440, 520)
@@ -398,6 +420,8 @@ class NotificationManager:
         selected_user = tk.StringVar()
         combo = ctk.CTkComboBox(sel_frame, variable=selected_user, values=display_list, state="readonly", font=("Segoe UI", 13), width=320, justify="center")
         combo.pack(pady=5)
+
+        fix_combo_hover(combo)
 
         qr_frame = ctk.CTkFrame(manager, width=280, height=280, fg_color="#f9f9f9", border_width=1, border_color="#e0e0e0")
         qr_frame.pack(pady=(15, 10))
@@ -478,19 +502,17 @@ class NotificationManager:
         win.title("Confirm Removal")
         win.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        win.configure(bg=bg_color, highlightthickness=2, highlightbackground="#d9534f", highlightcolor="#d9534f")
+        win.configure(bg=bg_color, highlightthickness=3, highlightbackground="#d9534f", highlightcolor="#d9534f")
         win.attributes("-topmost", True)
 
-        self.center_window(win, 440, 280)
+        self.center_window(win, 400, 230)
 
-        ctk.CTkLabel(win, text="⚠️ Warning", text_color="#d9534f", font=("Segoe UI", 18, "bold")).pack(pady=(15, 2))
+        ctk.CTkLabel(win, text="Warning", text_color="#d9534f", font=("Segoe UI", 18, "bold")).pack(pady=(15, 2))
         ctk.CTkLabel(win, text="Permanently remove:", font=("Segoe UI", 13)).pack()
         ctk.CTkLabel(win, text=f"{sample_name}", font=("Segoe UI", 14, "bold"), wraplength=380).pack(pady=2)
         ctk.CTkLabel(win, text=f"({sample_id})", text_color=["#666666", "#aaaaaa"], font=("Segoe UI", 11)).pack()
         
-        req_frame = ctk.CTkFrame(win, fg_color=["#f9e6e6", "#4a1c1c"], border_width=1, border_color="#d9534f", corner_radius=4)
-        req_frame.pack(pady=10, ipady=3, ipadx=10)
-        ctk.CTkLabel(req_frame, text=f"Requested by: {action_user}", text_color=["#d9534f", "#ff6b6b"], font=("Segoe UI", 12, "bold")).pack()
+        ctk.CTkButton(win, text=action_user, text_color=["#d9534f", "#ff6b6b"], font=("Segoe UI", 13, "bold"), width=280, height=32,fg_color=["#f9e6e6", "#4a1c1c"], border_width=2, border_color="#d9534f", corner_radius=4,hover=False).pack(pady=5)
 
         timeout_id = win.after(20000, lambda: cancel())
 
@@ -509,7 +531,7 @@ class NotificationManager:
         btn_frame = ctk.CTkFrame(win, fg_color="transparent")
         btn_frame.pack(pady=5)
         ctk.CTkButton(btn_frame, text="Confirm", command=confirm, fg_color="#d9534f", hover_color="#c9302c", font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
-        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color="#aaaaaa", hover_color="#888888", font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"], hover_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"], font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
 
     def open_new_sample_form(self):
         active_users = []
@@ -531,7 +553,9 @@ class NotificationManager:
         form.title("Manual Sample Entry")
         form.overrideredirect(True)
         bg_color, border_color = self._get_dynamic_colors()
-        form.configure(bg=bg_color, highlightthickness=2, highlightbackground=border_color, highlightcolor=border_color)
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        border_color = "#ffffff" if is_dark else "#041728"
+        form.configure(bg=bg_color, highlightthickness=4, highlightbackground=border_color, highlightcolor=border_color)
         form.attributes("-topmost", True)
 
         self.center_window(form, 400, 460)
@@ -565,25 +589,6 @@ class NotificationManager:
         combo_dept = ctk.CTkComboBox(form, variable=dept_var, state="readonly", font=("Segoe UI", 14), width=280, justify="center", button_hover_color=["#00386C","#2EFAD9"])
         combo_dept.configure(values=("Customer Teams", "Engineering", "Global Materials Development", "Laboratories", "Quality", "Reman & Proto", "Technical Analysis"))
         combo_dept.pack(pady=5)
-        
-        def fix_combo_hover(widget):
-            normal_color = widget.cget("button_color")
-            hover_color = widget.cget("button_hover_color")
-            
-            def on_enter(e): widget.configure(button_color=hover_color)
-            def on_leave(e): widget.configure(button_color=normal_color)
-            
-            # Bind the outer shell
-            widget.bind("<Enter>", on_enter)
-            widget.bind("<Leave>", on_leave)
-            
-            # The Fix: Bind the internal text box AND the internal arrow button directly!
-            if hasattr(widget, '_canvas'):
-                widget._canvas.bind("<Enter>", on_enter)
-                widget._canvas.bind("<Leave>", on_leave)
-            if hasattr(widget, '_entry'):
-                widget._entry.bind("<Enter>", on_enter)
-                widget._entry.bind("<Leave>", on_leave)
 
         fix_combo_hover(combo_dept)
 
@@ -638,77 +643,96 @@ class NotificationManager:
 
         ctk.CTkButton(form, text="Initialize Item", command=save_manual_entry, font=("Segoe UI", 13, "bold"), width=180).pack(pady=(20, 20))
 
-    # --- ADVANCED NOTIFICATION ENGINE ---
     def spawn_notification(self, text):
         window = tk.Toplevel(self.root)
         window.overrideredirect(True)
-        transparent_color = "#FF00FF"
+        
+        transparent_color = "#000001" 
         window.configure(bg=transparent_color)
         window.wm_attributes("-transparentcolor", transparent_color)
         window.attributes("-topmost", True)
         
+        # --- PULL COLORS DIRECTLY FROM BW_THEME.JSON ---
+        bg_color = ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"]
+        text_primary = ctk.ThemeManager.theme["CTkLabel"]["text_color"]
+        text_secondary = ctk.ThemeManager.theme["CTkButton"]["text_color_disabled"]
+        theme_accent = ctk.ThemeManager.theme["CTkButton"]["fg_color"]
+
         # 1. Semantic Analysis for Colors and Icons
         text_lower = text.lower()
-        if any(w in text_lower for w in ["successful", "success", "saved", "registered"]):
-            theme_color = "#09ce66" # Green
-            icon_name = "check-circle"
-        elif any(w in text_lower for w in ["removed", "denied", "failed", "lost", "error"]):
-            theme_color = "#d9534f" # Red
+        if "temp login active" in text_lower:
+            theme_color = ["#f39c12", "#f39c12"] 
+            icon_name = "user-clock"
+        elif "automatically signed in" in text_lower or "login successful" in text_lower:
+            theme_color = ["#09ce66", "#09ce66"] 
+            icon_name = "user"
+        elif "unsaved samples cleared" in text_lower:
+            theme_color = ["#09ce66", "#09ce66"] 
+            icon_name = "broom"
+        elif "copied" in text_lower:
+            theme_color = theme_accent 
+            icon_name = "copy"
+        elif "removal mode cancelled" in text_lower:
+            theme_color = ["#f39c12", "#f39c12"] 
             icon_name = "warning"
-        elif any(w in text_lower for w in ["temp", "warning", "action", "attention"]):
-            theme_color = "#f39c12" # Orange
+        elif any(w in text_lower for w in ["remove", "removed", "removal"]):
+            theme_color = ["#d9534f", "#d9534f"] 
+            icon_name = "trash-can"
+        elif any(w in text_lower for w in ["denied", "failed", "lost", "error"]):
+            theme_color = ["#d9534f", "#d9534f"] 
+            icon_name = "warning"
+        elif any(w in text_lower for w in ["temp", "action", "attention", "limit", "offline"]):
+            theme_color = ["#f39c12", "#f39c12"] 
             icon_name = "bell"
+        elif any(w in text_lower for w in ["successful", "success", "saved", "registered"]):
+            theme_color = ["#09ce66", "#09ce66"] 
+            icon_name = "floppy-disk"
         else:
-            theme_color = "#0E8187" # Cyan
+            theme_color = theme_accent 
             icon_name = "info-circle"
-            
-        bg_color = "#011528" if ctk.get_appearance_mode() == "Dark" else "#F3F3F3"
-        text_primary = "#ffffff" if ctk.get_appearance_mode() == "Dark" else "#051728"
-        text_secondary = "#aaaaaa" if ctk.get_appearance_mode() == "Dark" else "#666666"
 
         # 2. Clean Corner Frame
-        main_frame = ctk.CTkFrame(window, fg_color=bg_color, corner_radius=12, border_width=2, border_color=theme_color)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        main_frame = ctk.CTkFrame(window, fg_color=bg_color, corner_radius=10, border_width=4, border_color=theme_color)
+        main_frame.pack(fill=tk.BOTH, expand=True)
         
+        # 3. Lifespan Progress Bar
+        prog_bar = ctk.CTkProgressBar(main_frame, height=4, fg_color=bg_color, progress_color=theme_color, corner_radius=0, border_width=0)
+        prog_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=(5, 7), pady=(0, 4))
+        prog_bar.set(1.0)
+        
+        # 4. Text Layout Frame
         top_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         top_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(10, 5))
 
-        # 3. Dynamic Iconography
+        # 5. Dynamic Iconography
         try:
             from ctkfontawesome import icon_to_ctkimage
-            icon_img = icon_to_ctkimage(icon_name, fill=theme_color, scale_to_width=32)
+            mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
+            icon_img = icon_to_ctkimage(icon_name, fill=theme_color[mode_idx], scale_to_width=34)
             icon_lbl = ctk.CTkLabel(top_frame, text="", image=icon_img, width=40)
-            icon_lbl.pack(side=tk.LEFT, padx=(5, 15))
+            icon_lbl.pack(side=tk.LEFT, padx=(5, 10))
         except Exception:
             icon_lbl = ctk.CTkLabel(top_frame, text="🔔", text_color=theme_color, font=("Segoe UI", 26), width=40)
-            icon_lbl.pack(side=tk.LEFT, padx=(5, 15))
+            icon_lbl.pack(side=tk.LEFT, padx=(5, 10))
             
-        # 4. Text Layout
-        text_frame = ctk.CTkFrame(top_frame, fg_color="transparent")
-        text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # 6. Text Labels (Mathematically Centered!)
+        text_container = ctk.CTkFrame(top_frame, fg_color="transparent")
+        text_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        inner_text = ctk.CTkFrame(text_container, fg_color="transparent")
+        inner_text.place(relx=0, rely=0.5, anchor="w", relwidth=1.0) # PERFECT VERTICAL CENTERING
 
         lines = text.split('\n')
-        title_text = lines[0]
+        ctk.CTkLabel(inner_text, text=lines[0], text_color=theme_color, font=("Segoe UI", 14, "bold"), anchor="w", justify="left").pack(fill=tk.X)
         
-        ctk.CTkLabel(text_frame, text=title_text, text_color=theme_color, font=("Segoe UI", 12, "bold"), anchor="w", justify="left").pack(fill=tk.X)
-        
+        if len(lines) >= 2:
+            ctk.CTkLabel(inner_text, text=lines[1], text_color=text_primary, font=("Segoe UI", 16, "bold"), anchor="w", justify="left").pack(fill=tk.X)
         if len(lines) == 3:
-            ctk.CTkLabel(text_frame, text=lines[1], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.X)
-            ctk.CTkLabel(text_frame, text=lines[2], text_color=text_secondary, font=("Segoe UI", 10), anchor="w", justify="left").pack(fill=tk.X)
-        elif len(lines) == 2:
-            ctk.CTkLabel(text_frame, text=lines[1], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.X)
-        else:
-            for widget in text_frame.winfo_children(): widget.destroy()
-            ctk.CTkLabel(text_frame, text=lines[0], text_color=text_primary, font=("Segoe UI", 13, "bold"), anchor="w", justify="left").pack(fill=tk.BOTH, expand=True)
+            ctk.CTkLabel(inner_text, text=lines[2], text_color=text_secondary, font=("Segoe UI", 12, "italic"), anchor="w", justify="left").pack(fill=tk.X)
 
-        # 5. Lifespan Progress Bar
-        prog_bar = ctk.CTkProgressBar(main_frame, height=4, fg_color=bg_color, progress_color=theme_color, corner_radius=2)
-        prog_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=15, pady=(0, 10))
-        prog_bar.set(1.0)
-        
         self.position_and_show(window)
         
-        # 6. Smooth Drain Animation Loop
+        # 7. Smooth Drain Animation Loop
         duration_ms = 6500
         step_ms = 50
         steps = duration_ms // step_ms
@@ -725,16 +749,15 @@ class NotificationManager:
                 window.after(step_ms, update_progress)
 
         window.after(step_ms, update_progress)
-    # ----------------------------------------
 
     def position_and_show(self, window):
         window.update_idletasks()
-        window_width = 400
+        window_width = 360
         window_height = 100
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         
-        x_pos = screen_width - window_width - 50
+        x_pos = screen_width - window_width - 20
         y_pos = (screen_height - window_height - 60) - (len(self.active_notifications) * (window_height + 10))
         
         window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
@@ -747,12 +770,12 @@ class NotificationManager:
             self.recalculate_positions()
 
     def recalculate_positions(self):
-        window_width = 400
+        window_width = 360
         window_height = 100
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         
-        x_pos = screen_width - window_width - 50
+        x_pos = screen_width - window_width - 20
         base_y = screen_height - window_height - 60
         
         for index, window in enumerate(self.active_notifications):

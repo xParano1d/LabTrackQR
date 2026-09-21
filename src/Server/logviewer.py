@@ -116,12 +116,17 @@ class LogViewerWindow:
             DWMWA_CAPTION_COLOR = 35
             DWMWA_TEXT_COLOR = 36
             
-            if ctk.get_appearance_mode() == "Dark":
-                bg_color = ctypes.c_int(0x00281501)
-                text_color = ctypes.c_int(0x00FFFFFF) 
-            else:
-                bg_color = ctypes.c_int(0x00EBF0F2) 
-                text_color = ctypes.c_int(0x00281501)
+            mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
+            bg_hex = ctk.ThemeManager.theme["CTk"]["fg_color"][mode_idx]
+            text_hex = ctk.ThemeManager.theme["CTkLabel"]["text_color"][mode_idx]
+
+            # Windows DWM requires BGR integer formats, not standard #RRGGBB Hex strings!
+            def hex_to_bgr(hex_str):
+                c = int(hex_str.replace("#", ""), 16)
+                return (c & 0xFF) << 16 | (c & 0xFF00) | (c >> 16)
+
+            bg_color = ctypes.c_int(hex_to_bgr(bg_hex))
+            text_color = ctypes.c_int(hex_to_bgr(text_hex))
                 
             set_window_attribute(hwnd, DWMWA_CAPTION_COLOR, ctypes.byref(bg_color), ctypes.sizeof(bg_color))
             set_window_attribute(hwnd, DWMWA_TEXT_COLOR, ctypes.byref(text_color), ctypes.sizeof(text_color))
@@ -203,7 +208,7 @@ class LogViewerWindow:
         search_frame.pack(side=tk.TOP, anchor="e", padx=(0,3))
 
         self.search_var = tk.StringVar()
-        ctk.CTkLabel(search_frame, text="Search:", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT, padx=5)
+        ctk.CTkLabel(search_frame, text="Search:", font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT, padx=5)
 
         self.search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var, border_width=3, width=200)
         self.search_entry.pack(side=tk.LEFT)
@@ -288,7 +293,7 @@ class LogViewerWindow:
             self.execute_search()
 
         for display_text, actual_keyword in quick_tags:
-            btn = ctk.CTkButton(tags_frame, text=display_text, height=24, width=10, border_width=2, fg_color="transparent", text_color=["#051728", "#FFFFFF"])
+            btn = ctk.CTkButton(tags_frame, text=display_text, height=24, width=16, border_width=2, fg_color="transparent", text_color=["#051728", "#FFFFFF"])
             btn.pack(side=tk.LEFT, padx=3)
             btn.configure(command=lambda k=actual_keyword, b=btn: toggle_tag(k, b))
             self.tag_widgets[actual_keyword] = btn
@@ -302,9 +307,12 @@ class LogViewerWindow:
         now = datetime.now()
         
         self.b1 = ctk.CTkButton(self.btn_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), width=160)
-        self.b2 = ctk.CTkButton(self.btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), width=150, fg_color=["#33424F", "#33424F"])
+        unsel_bg = ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"]
+        unsel_hover = ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"]
         
-        self.history_btn = ctk.CTkButton(self.btn_frame, text="Archive", width=100, fg_color=["#555555", "#555555"])
+        self.b2 = ctk.CTkButton(self.btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), width=150, fg_color=["#33424F", "#33424F"], hover_color=["#4A5C6A", "#4A5C6A"])
+        
+        self.history_btn = ctk.CTkButton(self.btn_frame, text="Archive", width=100, fg_color=["#555555", "#555555"], hover_color=["#777777", "#777777"])
         
         self.main_menu = tk.Menu(self.history_btn, tearoff=0, bg="#ffffff", fg="#333333", font=("Segoe UI", 10))
         self.main_menu.add_command(label="Loading archives...", state="disabled") 
@@ -325,8 +333,8 @@ class LogViewerWindow:
         self.dropdown_frame.pack_propagate(False)
         
         self.d1 = ctk.CTkButton(self.dropdown_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'))
-        self.d2 = ctk.CTkButton(self.dropdown_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), fg_color=["#33424F", "#33424F"])
-        self.drop_history_btn = ctk.CTkButton(self.dropdown_frame, text="Archive", fg_color=["#555555", "#555555"])
+        self.d2 = ctk.CTkButton(self.dropdown_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), fg_color=["#33424F", "#33424F"], hover_color=["#4A5C6A", "#4A5C6A"])
+        self.drop_history_btn = ctk.CTkButton(self.dropdown_frame, text="Archive", fg_color=["#555555", "#555555"], hover_color=["#777777", "#777777"])
         self.drop_history_btn.bind("<ButtonRelease-1>", popup_archive_menu)
         self.d4 = ctk.CTkButton(self.dropdown_frame, text="Open in External Editor", command=lambda: [self.force_close_menu(), self.open_external_file()], fg_color="#217346", hover_color="#2a8f57")
 
@@ -338,11 +346,11 @@ class LogViewerWindow:
         style = ttk.Style(self.viewer)
         style.theme_use("default")
         
-        bg_color = self.viewer._apply_appearance_mode(["#FFFFFF", "#081E33"])
-        text_color = self.viewer._apply_appearance_mode(["#051728", "#FFFFFF"])
-        selected_color = self.viewer._apply_appearance_mode(["#00386C", "#0E8187"])
-        head_bg = self.viewer._apply_appearance_mode(["#F2F0EB", "#051728"])
-        head_hover = self.viewer._apply_appearance_mode(["#E2ECF5", "#0B2238"])
+        bg_color = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+        text_color = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
+        selected_color = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+        head_bg = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTk"]["fg_color"])
+        head_hover = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["hover_color"])
 
         style.configure("Treeview", background=bg_color, foreground=text_color, rowheight=28, fieldbackground=bg_color, borderwidth=1, bordercolor=selected_color, lightcolor=selected_color, darkcolor=selected_color)
         style.map('Treeview', background=[('selected', selected_color)])

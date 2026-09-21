@@ -116,12 +116,17 @@ class LogViewerWindow:
             DWMWA_CAPTION_COLOR = 35
             DWMWA_TEXT_COLOR = 36
             
-            if ctk.get_appearance_mode() == "Dark":
-                bg_color = ctypes.c_int(0x00281501)
-                text_color = ctypes.c_int(0x00FFFFFF) 
-            else:
-                bg_color = ctypes.c_int(0x00EBF0F2) 
-                text_color = ctypes.c_int(0x00281501)
+            mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
+            bg_hex = ctk.ThemeManager.theme["CTk"]["fg_color"][mode_idx]
+            text_hex = ctk.ThemeManager.theme["CTkLabel"]["text_color"][mode_idx]
+
+            # Windows DWM requires BGR integer formats, not standard #RRGGBB Hex strings!
+            def hex_to_bgr(hex_str):
+                c = int(hex_str.replace("#", ""), 16)
+                return (c & 0xFF) << 16 | (c & 0xFF00) | (c >> 16)
+
+            bg_color = ctypes.c_int(hex_to_bgr(bg_hex))
+            text_color = ctypes.c_int(hex_to_bgr(text_hex))
                 
             set_window_attribute(hwnd, DWMWA_CAPTION_COLOR, ctypes.byref(bg_color), ctypes.sizeof(bg_color))
             set_window_attribute(hwnd, DWMWA_TEXT_COLOR, ctypes.byref(text_color), ctypes.sizeof(text_color))
@@ -302,6 +307,9 @@ class LogViewerWindow:
         now = datetime.now()
         
         self.b1 = ctk.CTkButton(self.btn_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'), width=160)
+        unsel_bg = ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"]
+        unsel_hover = ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"]
+        
         self.b2 = ctk.CTkButton(self.btn_frame, text="Current Month Logs", command=lambda y=now.strftime("%Y"), m=now.strftime("%m"): self.switch_view('history_specific', year=y, month=m), width=150, fg_color=["#33424F", "#33424F"], hover_color=["#4A5C6A", "#4A5C6A"])
         
         self.history_btn = ctk.CTkButton(self.btn_frame, text="Archive", width=100, fg_color=["#555555", "#555555"], hover_color=["#777777", "#777777"])
@@ -338,11 +346,11 @@ class LogViewerWindow:
         style = ttk.Style(self.viewer)
         style.theme_use("default")
         
-        bg_color = self.viewer._apply_appearance_mode(["#FFFFFF", "#081E33"])
-        text_color = self.viewer._apply_appearance_mode(["#051728", "#FFFFFF"])
-        selected_color = self.viewer._apply_appearance_mode(["#00386C", "#0E8187"])
-        head_bg = self.viewer._apply_appearance_mode(["#F2F0EB", "#051728"])
-        head_hover = self.viewer._apply_appearance_mode(["#E2ECF5", "#0B2238"])
+        bg_color = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+        text_color = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTkLabel"]["text_color"])
+        selected_color = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["fg_color"])
+        head_bg = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTk"]["fg_color"])
+        head_hover = self.viewer._apply_appearance_mode(ctk.ThemeManager.theme["CTkButton"]["hover_color"])
 
         style.configure("Treeview", background=bg_color, foreground=text_color, rowheight=28, fieldbackground=bg_color, borderwidth=1, bordercolor=selected_color, lightcolor=selected_color, darkcolor=selected_color)
         style.map('Treeview', background=[('selected', selected_color)])

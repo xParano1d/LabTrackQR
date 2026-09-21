@@ -93,6 +93,15 @@ def setup_tray(root, scanner_mgr):
     def trigger_log_viewer(icon, item): message_queue.put("COMMAND:OPEN_LOG_VIEWER")
     def trigger_user_manager(icon, item): message_queue.put("COMMAND:OPEN_USER_MANAGER")
     
+    def toggle_theme(icon, item):
+        current_mode = ctk.get_appearance_mode()
+        new_mode = "Light" if current_mode == "Dark" else "Dark"
+        ctk.set_appearance_mode(new_mode)
+        icon.update_menu()
+
+    def get_theme_text(item):
+        return "Change theme to Light" if ctk.get_appearance_mode() == "Dark" else "Change theme to Dark"
+
     def toggle_autostart(icon, item):
         state['autostart'] = not state['autostart']
         set_autostart(state['autostart'])
@@ -110,6 +119,7 @@ def setup_tray(root, scanner_mgr):
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Manage Employee Badges", trigger_user_manager),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem(get_theme_text, toggle_theme),
         pystray.MenuItem("Run on Windows Startup", toggle_autostart, checked=lambda item: state['autostart']),
         pystray.MenuItem("Quit", on_quit)
     )
@@ -152,10 +162,10 @@ if __name__ == "__main__":
     if ad_employee_data:
         scanner_mgr.ad_fallback_name = ad_employee_data.get('full_name')
         if storage.is_offline_mode:
-            message_queue.put("⚠️ SERVER OFFLINE ⚠️\nUsing cached profile.\nData will be saved locally.")
+            message_queue.put("SERVER OFFLINE\nUsing cached profile.\nData will be saved locally.")
     else:
         if storage.is_offline_mode:
-            message_queue.put("⚠️ SERVER OFFLINE ⚠️\nCannot register new users.\n")
+            message_queue.put("SERVER OFFLINE\nCannot register new users.\n")
         else:
             message_queue.put(f"COMMAND:REGISTER_AD_USER:{ad_username}")
 
