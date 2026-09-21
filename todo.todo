@@ -17,18 +17,19 @@
 ☐ Mapped storage??? like visualization of storage and where things are etc. @critical 
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
-☐ dark/white theme switch (make sure icons and top bar colors are correct) @today
+✔ dark/white theme switch (make sure icons and top bar colors are correct) @today @done (9/21/2026, 11:50:09 PM)
 ☐ animate blinking for error and action reqiured popups @low
 ✔ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) ??? @today @done (9/17/2026, 2:55:49 PM)
 ✔ close manage employee badges after successfull relogin @low @done (9/18/2026, 12:13:56 PM)
-☐ too fast scan of location->smp takes smp:{id} string to location name @critical 
+✔ too fast scan of location->smp takes smp:{id} string to location name @critical @today @done (9/21/2026, 2:32:33 PM)
+✔ fix no clearance popup when scanning only location and wrong popup count with all this setup and different combinations @today @done (9/21/2026, 2:32:40 PM)
+✔ fix bug with scaning sample, location or id multiple times doubles the amount of popus being displayed but it doesn't make more than 1 record in history thank god @high @today @done (9/21/2026, 2:56:28 PM)
+☐ fix bug with removal mode being bypassed by scanning sample not from system or wrong qr code and popup cancel message needs to be edited @high
 ☐ fix a bug when saving file corrupts it when saved with new records with polish characters inserted manually by editing .csv in history? on server only?? idk @critical 
 ☐ fix relog old sample popup missing @high
 ☐ fix old sample notification coming up AGAIN after a while
 ☐ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again) @high
 ☐ fix form validation red background for entries that are wrong @low
-☐ fix bug with removal mode being bypassed by scanning sample not from system or wrong qr code and popup cancel message needs to be edited
-☐ fix no clearance popup when scanning only location and wrong popup count with all this setup and different combinations
 tkinter to cutom tkinter elements changes:
     ✘ manage employee badges, add new sample change from optionMenu to comboBox for search and move func dept to bottom (above initialize sample button) @cancelled (9/18/2026, 12:06:07 PM)
     ✔ removal mode cancel button change @done (9/18/2026, 1:47:51 PM)
@@ -83,7 +84,8 @@ Excel data integration:
     
 stuff to consider:
 ☐ security regarding only one copy of logviewer that everyone has access to and could easly edit/delete/corrupt
-    |___backup on labshare local folders (eg. C:/)
+    |___backup on labshare local folders (eg. C:/) @critical 
 ☐ 6 digit sample id lock (WILL GEMS NUMBER EVER END? now its at 923939 meaning 76061 left????)
     |___increase form to normal form for digits/letters etc. (-_()) @critical windows ad setup change 8 digits only
+☐ About Tab for licenses and used things in app??????? @low
 ☐ prepare instruction for scanner configuration and user manual @critical

@@ -210,6 +210,9 @@ if __name__ == "__main__":
     if ctypes.windll.kernel32.GetLastError() == 183: 
         err_root = ctk.CTk()
         err_root.withdraw()
+        try:
+            err_root.iconbitmap(resource_path("iconApp.ico"))
+        except Exception: pass
         err_root.attributes("-topmost", True) 
         messagebox.showwarning(
             "LabTrack Server Already Running", 

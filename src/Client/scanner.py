@@ -103,6 +103,7 @@ class ScannerNode:
             self.message_queue.put("Scan Timeout:\nUnsaved samples cleared.")
         elif self.current_location:
             self.current_location = None 
+            self.message_queue.put("Scan Timeout:\nUnused location cleared.")
 
     def _start_or_refresh_timer(self):
         if self.timeout_timer:
@@ -127,6 +128,10 @@ class ScannerNode:
                 else:
                     self.message_queue.put(f"Scanner Connected on {self.port}\nPlease scan your ID badge.")
                 
+                # Setup variables for the Global Mash Debouncer
+                recent_scan = None
+                recent_scan_time = 0
+                
                 while self.is_running:
                     if ser.in_waiting > 0:
                         raw_data = ser.readline()
@@ -134,100 +139,112 @@ class ScannerNode:
                             raw_text = raw_data.decode('utf-8', errors='ignore').strip()
                             if not raw_text: continue
 
-                            scanned_text = "".join(c for c in raw_text if c.isprintable()).strip()
+                            # 1. Clean invisible characters and remove AIM modifiers (like ]C1) globally
+                            raw_text = "".join(c for c in raw_text if c.isprintable()).strip()
+                            raw_text = re.sub(r'\][A-Za-z][0-9A-Za-z]', '', raw_text)
+                            
+                            # 2. Force a newline before any known header so mashed scans split safely
+                            clean_text = raw_text.replace("LOC:", "\nLOC:").replace("SMP:", "\nSMP:").replace("ID:", "\nID:")
+                            scan_parts = [p.strip() for p in clean_text.split('\n') if p.strip()]
 
-                            if scanned_text == "CMD:LOGOUT":
-                                if self.user:
-                                    self.message_queue.put(f"Logged Out:\nGoodbye {self.user}.")
-                                    self.user = None
-                                    self.auto_revert = False  # <-- CLEAR FLAG
-                                    if self.revert_timer: self.revert_timer.cancel()
-                                    self._reset_state()
-                                continue
+                            # Process each separated scan sequentially
+                            for scanned_text in scan_parts:
+                                if not scanned_text: continue
                                 
-                            badge_match = self.badge_pattern.match(scanned_text)
-                            if badge_match:
-                                badge_id = badge_match.group(1) 
-                                emp_name = self.storage.get_employee_name(badge_id)
-                                
-                                if emp_name:
-                                    if self.user == emp_name:
-                                        # User scanned their own badge while already logged in
-                                        winsound.MessageBeep(winsound.MB_ICONASTERISK)
-                                        self.message_queue.put(f"Session Active:\nYou are already logged in as {emp_name}.")
-                                    elif self.user and self.user != emp_name:
-                                        # User scanned a different badge while someone is logged in
-                                        winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-                                        self.message_queue.put(f"COMMAND:CONFIRM_RELOG:{emp_name}")
+                                # --- THE GLOBAL MASH DEBOUNCER ---
+                                current_time = time.time()
+                                if scanned_text == recent_scan and (current_time - recent_scan_time) < 1.5:
+                                    continue # Silently drop identical rapid-fire scans!
+                                    
+                                recent_scan = scanned_text
+                                recent_scan_time = current_time
+                                # ---------------------------------
+                                    
+                                badge_match = self.badge_pattern.match(scanned_text)
+                                if badge_match:
+                                    badge_id = badge_match.group(1) 
+                                    emp_name = self.storage.get_employee_name(badge_id)
+                                    
+                                    if emp_name:
+                                        if self.user == emp_name:
+                                            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                                            self.message_queue.put(f"Session Active:\nYou are already logged in as {emp_name}.")
+                                        elif self.user and self.user != emp_name:
+                                            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                                            self.message_queue.put(f"COMMAND:CONFIRM_RELOG:{emp_name}")
+                                        else:
+                                            self.user = emp_name
+                                            self.message_queue.put(f"Login Successful:\nWelcome {self.user}!")
                                     else:
-                                        # Standard clean login
-                                        self.user = emp_name
-                                        self.message_queue.put(f"Login Successful:\nWelcome {self.user}!")
-                                else:
-                                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
-                                    self.message_queue.put(f"COMMAND:UNKNOWN_BADGE:{badge_id}")
-                                continue
+                                        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                                        self.message_queue.put(f"COMMAND:UNKNOWN_BADGE:{badge_id}")
+                                    continue
 
-                            scanned_text = re.sub(r'^\][A-Za-z][0-9A-Za-z]', '', scanned_text).strip()
-                            if not scanned_text: continue
+                                if self.user is None:
+                                    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                                    self.message_queue.put("COMMAND:SHOW_LOCK_SCREEN")
+                                    continue
 
-                            if self.user is None:
-                                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-                                self.message_queue.put("COMMAND:SHOW_LOCK_SCREEN")
-                                continue
+                                self._start_or_refresh_timer()
+                                self._start_ad_revert_timer()
 
-                            self._start_or_refresh_timer()
-                            self._start_ad_revert_timer()
+                                # --- THE REMOVAL VALIDATION GATE ---
+                                if self.manager and self.manager.removal_mode and scanned_text.startswith("SMP:"):
+                                    scanned_text = scanned_text.replace("SMP: ", "SMP:").replace("SMP:", "").strip()
 
-                            # --- THE REMOVAL VALIDATION GATE ---
-                            if self.manager and self.manager.removal_mode and scanned_text.startswith("SMP:"):
-                                scanned_text = scanned_text.replace("SMP: ", "SMP:").replace("SMP:", "").strip()
-
-                                if not self.storage.sample_exists(scanned_text):
-                                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
-                                    self.message_queue.put(f"Removal Error:\n{scanned_text} is not in the system.")
+                                    if not self.storage.sample_exists(scanned_text):
+                                        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                                        self.message_queue.put(f"Removal Error:\n{scanned_text} is not in the system.")
+                                        self.manager.removal_mode = False 
+                                        continue
+                                    
+                                    sample_name = self.storage.get_sample_name(scanned_text)
+                                    self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}|{self.user}|{sample_name}")
                                     self.manager.removal_mode = False 
                                     continue
-                                
-                                sample_name = self.storage.get_sample_name(scanned_text)
-                                self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}|{self.user}|{sample_name}")
-                                self.manager.removal_mode = False 
-                                continue
-                                
-                            elif self.manager and self.manager.removal_mode:
-                                self.message_queue.put("Removal Error:\nPlease scan a valid SMP code.")
-                                self.manager.removal_mode = False
-                                continue
-
-                            if scanned_text.startswith("LOC:"):
-                                self.current_location = scanned_text
-                                self.message_queue.put(f"Location Set:\n{self.current_location.replace('LOC:', '').strip()}")
-                                
-                                for smp in self.pending_samples:
-                                    self.storage.save_data_async(location_id=self.current_location, sample_id=smp, user=self.user, message_queue=self.message_queue)
-                                self.pending_samples.clear()
-
-                            elif scanned_text.startswith("SMP:"):
-                                scanned_text = scanned_text.replace("SMP: ", "SMP:").replace("SMP:", "").strip()
-
-                                if not self.storage.sample_exists(scanned_text):
-                                    winsound.MessageBeep(winsound.MB_ICONASTERISK)
-                                    self.message_queue.put(f"Validation Error:\n{scanned_text} is not initialized!")
+                                    
+                                elif self.manager and self.manager.removal_mode:
+                                    self.message_queue.put("Removal Error:\nPlease scan a valid SMP code.")
+                                    self.manager.removal_mode = False
                                     continue
 
-                                if self.current_location:
-                                    self.storage.save_data_async(location_id=self.current_location, sample_id=scanned_text, user=self.user, message_queue=self.message_queue)
-                                    self.current_location = None
+                                # --- STANDARD SCANS ---
+                                if scanned_text.startswith("LOC:"):
+                                    self.current_location = scanned_text
+                                    
+                                    if self.pending_samples:
+                                        # If samples are waiting, instantly save them and SKIP the "Location Set" popup
+                                        for smp in self.pending_samples:
+                                            self.storage.save_data_async(location_id=self.current_location, sample_id=smp, user=self.user, message_queue=self.message_queue)
+                                        
+                                        self.pending_samples.clear()
+                                        self.current_location = None # Consume the location since it was just used!
+                                    else:
+                                        # Only show "Location Set" if it was scanned empty
+                                        self.message_queue.put(f"Location Set:\n{self.current_location.replace('LOC:', '').strip()}")
+
+                                elif scanned_text.startswith("SMP:"):
+                                    scanned_text = scanned_text.replace("SMP: ", "SMP:").replace("SMP:", "").strip()
+
+                                    if not self.storage.sample_exists(scanned_text):
+                                        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+                                        self.message_queue.put(f"Validation Error:\n{scanned_text} is not initialized!")
+                                        continue
+
+                                    if self.current_location:
+                                        self.storage.save_data_async(location_id=self.current_location, sample_id=scanned_text, user=self.user, message_queue=self.message_queue)
+                                        self.current_location = None # Consume the location since it was just used!
+                                    else:
+                                        # THE FIX: Long-term deduplication! Don't add it if it's already queued.
+                                        if scanned_text not in self.pending_samples:
+                                            self.pending_samples.append(scanned_text)
+                                            self.message_queue.put(f"Sample Queued:\n{scanned_text}\n(Scan Location to save)")
                                 else:
-                                    self.pending_samples.append(scanned_text)
-                                    self.message_queue.put(f"Sample Queued:\n{scanned_text}\n(Scan Location to save)")
-                            else:
-                                self.message_queue.put(f"Unknown Code:\n{scanned_text}")
+                                    self.message_queue.put(f"Unknown Code:\n{scanned_text}")
 
                         except UnicodeDecodeError:
                             pass
         except serial.SerialException as e:
-            # Check if Windows is telling us the port is locked by another app
             if "Access is denied" in str(e):
                 self.message_queue.put(f"Scanner on {self.port} Locked!\nClose other apps using it.")
             else:
