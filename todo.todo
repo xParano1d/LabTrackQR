@@ -24,8 +24,9 @@
 ✔ too fast scan of location->smp takes smp:{id} string to location name @critical @today @done (9/21/2026, 2:32:33 PM)
 ✔ fix no clearance popup when scanning only location and wrong popup count with all this setup and different combinations @today @done (9/21/2026, 2:32:40 PM)
 ✔ fix bug with scaning sample, location or id multiple times doubles the amount of popus being displayed but it doesn't make more than 1 record in history thank god @high @today @done (9/21/2026, 2:56:28 PM)
-☐ fix bug with removal mode being bypassed by scanning sample not from system or wrong qr code and popup cancel message needs to be edited @high
-☐ fix a bug when saving file corrupts it when saved with new records with polish characters inserted manually by editing .csv in history? on server only?? idk @critical 
+✔ fix bug with removal mode being bypassed by scanning sample not from system or wrong qr code and popup cancel message needs to be edited @high @done (9/22/2026, 8:56:59 AM)
+✔ fix a bug when saving file corrupts it when saved with new records with polish characters inserted manually by editing .csv in history? on server only?? idk @critical @done (9/22/2026, 10:20:29 AM)
+✔ fix logviewer poor session handling (initial user is only considered when it should be just adaptable to whoever is logged in) @critical @done (9/22/2026, 10:50:13 AM)
 ☐ fix relog old sample popup missing @high
 ☐ fix old sample notification coming up AGAIN after a while
 ☐ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again) @high
@@ -84,7 +85,7 @@ Excel data integration:
     
 stuff to consider:
 ☐ security regarding only one copy of logviewer that everyone has access to and could easly edit/delete/corrupt
-    |___backup on labshare local folders (eg. C:/) @critical 
+    |___backup on labshare local folders (at %localappdata%\LabTrackQR\Backup) @critical 
 ☐ 6 digit sample id lock (WILL GEMS NUMBER EVER END? now its at 923939 meaning 76061 left????)
     |___increase form to normal form for digits/letters etc. (-_()) @critical windows ad setup change 8 digits only
 ☐ About Tab for licenses and used things in app??????? @low

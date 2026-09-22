@@ -3,4 +3,5 @@ and:
 serial port
 usb virtual serial port
 manual mode
-speed: 1 second
+sending speed: 0.1 second
+no conversion

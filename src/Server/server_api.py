@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import csv
 import time
@@ -159,7 +160,17 @@ class LabTrackAPI:
             col_idx = cols.index(sort_col) if sort_col in cols else 0
 
             if sort_col in ("Date/Day", "Time"):
-                results.sort(key=lambda x: (x[0] + " " + x[1]) if len(x)>1 else "", reverse=is_reverse)
+                def sort_key(row):
+                    date_val = row[0].strip()
+                    time_val = row[1].strip() if len(row) > 1 else ""
+                    
+                    if re.match(r"^\d{2}\.\d{2}\.\d{4}", date_val):
+                        date_val = f"{date_val[6:10]}-{date_val[3:5]}-{date_val[0:2]}"
+                    elif re.match(r"^\d{2}-\d{2}-\d{4}", date_val):
+                        date_val = f"{date_val[6:10]}-{date_val[3:5]}-{date_val[0:2]}"
+                    
+                    return f"{date_val} {time_val}"
+                results.sort(key=sort_key, reverse=is_reverse)
             else:
                 results.sort(key=lambda x: x[col_idx].lower() if len(x)>col_idx else "", reverse=is_reverse)
 

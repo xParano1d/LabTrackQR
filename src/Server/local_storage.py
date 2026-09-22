@@ -1,4 +1,5 @@
 import os
+import io
 import csv
 import json
 import shutil
@@ -45,10 +46,20 @@ class CsvStorage:
         try:
             needs_rewrite = False
             rows = []
-            with open(filepath, 'r', encoding='utf-8') as f:
+            
+            # --- Support for utf-8-sig to prevent BOM parsing errors ---
+            with open(filepath, 'r', encoding='utf-8-sig') as f:
                 reader = csv.reader(f, delimiter=';')
                 header = next(reader, None)
+                
+                # Check for garbage at the start of the header
+                if header and len(header) > 0 and 'Date' not in header[0] and 'Date' in ''.join(header):
+                    # Clean corrupted headers
+                    header[0] = 'Date'
+                    needs_rewrite = True
+                    
                 if header: rows.append(header)
+                
                 for r in reader:
                     if len(r) > 0:
                         original = r[0]
@@ -57,6 +68,7 @@ class CsvStorage:
                             needs_rewrite = True
                             r[0] = fixed
                     rows.append(r)
+                    
             if needs_rewrite:
                 with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
                     writer = csv.writer(f, delimiter=';')
@@ -76,6 +88,23 @@ class CsvStorage:
         if not os.path.exists(self.history_dir):
             os.makedirs(self.history_dir)
 
+    def _safe_csv_read(self, filepath):
+        """Attempts UTF-8. If Excel broke the encoding, it rescues the data using Windows ANSI and self-heals the file."""
+        if not os.path.exists(filepath): return []
+        
+        try:
+            with open(filepath, 'r', encoding='utf-8-sig') as f:
+                raw_text = f.read()
+        except UnicodeDecodeError:
+            # Excel saved it as ANSI! Rescue the Polish characters using cp1250...
+            with open(filepath, 'r', encoding='cp1250') as f:
+                raw_text = f.read()
+            # ...and immediately self-heal the file back to UTF-8!
+            with open(filepath, 'w', encoding='utf-8-sig') as f:
+                f.write(raw_text)
+                
+        return list(csv.reader(io.StringIO(raw_text), delimiter=';'))
+    
     def is_server_available(self):
         if not self.sync_path: return False
         return os.path.exists(self.sync_path)
@@ -192,7 +221,7 @@ class CsvStorage:
     def sample_exists(self, sample_id):
         with self.lock:
             try:
-                with open(self.inventory_file, 'r', encoding='utf-8') as f:
+                with open(self.inventory_file, 'r', encoding='utf-8-sig') as f:
                     reader = csv.reader(f, delimiter=';')
                     next(reader, None) 
                     for row in reader:
@@ -203,7 +232,7 @@ class CsvStorage:
     def get_sample_name(self, sample_id):
         with self.lock:
             try:
-                with open(self.inventory_file, 'r', encoding='utf-8') as f:
+                with open(self.inventory_file, 'r', encoding='utf-8-sig') as f:
                     reader = csv.reader(f, delimiter=';')
                     next(reader, None)
                     for row in reader:
@@ -237,7 +266,7 @@ class CsvStorage:
             found_existing = False
 
             try:
-                with open(self.inventory_file, 'r', encoding='utf-8') as f:
+                with open(self.inventory_file, 'r', encoding='utf-8-sig') as f:
                     reader = csv.reader(f, delimiter=';')
                     header = next(reader, None)
                     if header: rows_to_keep.append(header)
@@ -278,7 +307,7 @@ class CsvStorage:
             req, dept, proj = "Unknown", "Unknown", "Unknown"
             rows_to_keep = []
             try:
-                with open(self.inventory_file, 'r', encoding='utf-8') as f:
+                with open(self.inventory_file, 'r', encoding='utf-8-sig') as f:
                     reader = csv.reader(f, delimiter=';')
                     header = next(reader, None)
                     if header: rows_to_keep.append(header)
@@ -304,8 +333,9 @@ class CsvStorage:
     def get_inventory_data(self):
         with self.lock:
             try:
-                with open(self.inventory_file, 'r', encoding='utf-8') as f: return list(csv.reader(f, delimiter=';'))[1:] 
-            except: return []
+                # Use the self-healing reader and skip the header row [1:]
+                return self._safe_csv_read(self.inventory_file)[1:] 
+            except Exception: return []
 
     def get_available_history_months(self):
         months = []
@@ -321,8 +351,9 @@ class CsvStorage:
     def get_specific_history(self, year, month):
         with self.lock:
             try:
-                with open(os.path.join(self.history_dir, year, f"log_{month}.csv"), 'r', encoding='utf-8') as f: return list(csv.reader(f, delimiter=';'))[1:]
-            except: return []
+                filepath = os.path.join(self.history_dir, year, f"log_{month}.csv")
+                return self._safe_csv_read(filepath)[1:]
+            except Exception: return []
                 
     def get_all_time_history(self):
         all_data = []

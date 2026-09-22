@@ -63,6 +63,7 @@ class NotificationManager:
         self.active_notifications = []
         self.waiting_removal_win = None
         self.active_log_windows = []
+        self.stale_notified_today = {}
         
         # --- LOAD CUSTOM THEME ---
         theme_path = resource_path("BW_theme.json")
@@ -104,19 +105,24 @@ class NotificationManager:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
             def ping_server():
                 try:
-                    resp = requests.get(f"{target_url}/api/ping", timeout=2)
+                    # 5 second timeout
+                    resp = requests.get(f"{target_url}/api/ping", timeout=5) 
                     if resp.status_code == 200:
+                        self.failed_pings = 0  # Reset strikes on success!
                         if getattr(self.storage, 'is_offline_mode', False):
                             self.storage.is_offline_mode = False
                             import winsound
                             winsound.MessageBeep(winsound.MB_ICONASTERISK)
                             self.message_queue.put("SERVER CONNECTED \nOnline mode active.\nSyncing data in background...")
                 except Exception:
-                    if not getattr(self.storage, 'is_offline_mode', True):
-                        self.storage.is_offline_mode = True
-                        import winsound
-                        winsound.MessageBeep(winsound.MB_ICONHAND)
-                        self.message_queue.put("CONNECTION LOST\nSwitched to Offline Mode.\nData will be saved locally.")
+                    # 2-Strike Rule
+                    self.failed_pings = getattr(self, 'failed_pings', 0) + 1
+                    if self.failed_pings >= 2:
+                        if not getattr(self.storage, 'is_offline_mode', True):
+                            self.storage.is_offline_mode = True
+                            import winsound
+                            winsound.MessageBeep(winsound.MB_ICONHAND)
+                            self.message_queue.put("CONNECTION LOST\nSwitched to Offline Mode.\nData will be saved locally.")
 
             threading.Thread(target=ping_server, daemon=True).start()
         self.root.after(5000, self.send_heartbeat)
@@ -149,6 +155,21 @@ class NotificationManager:
         splash.after(2500, splash.destroy)
 
     def check_queue(self):
+        # LIVE SESSION AWARENESS
+        if self.scanner_mgr:
+            users = [node.user for node in self.scanner_mgr.active_scanners.values() if node.user]
+            active_user = self.scanner_mgr.ad_fallback_name if (self.scanner_mgr.ad_fallback_name and self.scanner_mgr.ad_fallback_name in users) else (users[0] if users else (self.scanner_mgr.ad_fallback_name or ""))
+            
+            if getattr(self, 'last_known_user', None) != active_user:
+                self.last_known_user = active_user
+                # Push the new user to all open windows instantly
+                for win in self.active_log_windows:
+                    if win.viewer.winfo_exists():
+                        win.current_user = active_user
+                        # If "My Samples" is clicked, force a live visual refresh!
+                        if hasattr(win, 'active_filters') and "MAGIC_ME_FILTER" in win.active_filters:
+                            win.execute_search()
+
         while not self.message_queue.empty():
             msg = self.message_queue.get()
             
@@ -157,6 +178,11 @@ class NotificationManager:
             if msg == "COMMAND:WAITING_FOR_REMOVAL_SCAN": self.open_waiting_for_removal(); continue
             if msg == "COMMAND:OPEN_USER_MANAGER": self.open_employee_directory(); continue
             if msg == "COMMAND:SHOW_LOCK_SCREEN": self.open_lock_screen(); continue
+            
+            if msg == "COMMAND:FORCE_CLOSE_REMOVAL_WIN":
+                if self.waiting_removal_win and self.waiting_removal_win.winfo_exists():
+                    self.waiting_removal_win.destroy()
+                continue
                 
             if isinstance(msg, str) and msg.startswith("COMMAND:UNKNOWN_BADGE:"):
                 self.open_register_badge(msg.replace("COMMAND:UNKNOWN_BADGE:", ""))
@@ -186,6 +212,26 @@ class NotificationManager:
 
     def open_log_viewer(self, initial_filters=None):
         self.active_log_windows = [w for w in self.active_log_windows if w.viewer.winfo_exists()]
+        
+        # ACTIVE USER DETECTION
+        active_user = ""
+        if self.scanner_mgr:
+            users_logged_in = [node.user for node in self.scanner_mgr.active_scanners.values() if node.user]
+            
+            # Prioritize the AD user if they are logged into ANY scanner
+            if self.scanner_mgr.ad_fallback_name and self.scanner_mgr.ad_fallback_name in users_logged_in:
+                active_user = self.scanner_mgr.ad_fallback_name
+            # Otherwise, just grab the first logged-in user we find
+            elif users_logged_in:
+                active_user = users_logged_in[0]
+            # Fallback to AD user if all scanners are somehow blank
+            else:
+                active_user = self.scanner_mgr.ad_fallback_name or ""
+                
+        # Instantly update any currently open windows with the new user context!
+        for win in self.active_log_windows:
+            win.current_user = active_user
+
         if len(self.active_log_windows) >= 2:
             import winsound
             winsound.MessageBeep(winsound.MB_ICONHAND)
@@ -203,8 +249,7 @@ class NotificationManager:
             if msg == "OPEN_NEW_VIEWER": self.open_log_viewer()
             else: self.spawn_notification(msg)
 
-        current_user = self.scanner_mgr.ad_fallback_name if self.scanner_mgr else ""
-        viewer_instance = LogViewerWindow(self.root, self.storage, viewer_router, is_server=False, current_user=current_user, initial_filters=initial_filters)
+        viewer_instance = LogViewerWindow(self.root, self.storage, viewer_router, is_server=False, current_user=active_user, initial_filters=initial_filters)
         self.active_log_windows.append(viewer_instance)
 
     def start_stale_check(self, current_user_name):

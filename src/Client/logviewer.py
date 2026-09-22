@@ -515,6 +515,11 @@ class LogViewerWindow:
         def smart_sort_key(item):
             primary = str(item[0]).strip().lower()
             tie_breaker = str(item[1])
+            
+            # --- THE FIX: Teach the sorter to read Polish dates ---
+            if re.match(r"^\d{2}-\d{2}-\d{4}", primary):
+                primary = f"{primary[6:10]}-{primary[3:5]}-{primary[0:2]}" + primary[10:]
+                
             if primary.isdigit():
                 return (0, int(primary), tie_breaker)
             return (1, primary, tie_breaker)
@@ -646,16 +651,28 @@ class LogViewerWindow:
         for row in data:
             loc_lower = str(row[2]).replace('LOC:', '').replace('LOC-', '').strip().lower()
             
+            # 1. Parse the date whether it is ISO (YYYY-MM-DD) or DD.MM.YYYY or DD-MM-YYYY
+            raw_date_str = str(row[0]).strip()[:10]
             row_date = None
+            
             try:
-                row_date = datetime.strptime(str(row[0]).strip()[:10], "%Y-%m-%d")
+                if "." in raw_date_str:
+                    row_date = datetime.strptime(raw_date_str, "%d.%m.%Y")
+                elif "-" in raw_date_str and len(raw_date_str) > 2 and raw_date_str[2] == "-":
+                    row_date = datetime.strptime(raw_date_str, "%d-%m-%Y")
+                else:
+                    row_date = datetime.strptime(raw_date_str, "%Y-%m-%d")
             except Exception: pass
+            
+            display_date = row_date.strftime("%d-%m-%Y") if row_date else raw_date_str
+            
+            # 2. Format it beautifully for the UI
+            display_date = row_date.strftime("%d-%m-%Y") if row_date else raw_date_str
             
             is_old = False
             is_today = False
             is_closed = 'closed' in loc_lower or 'removed' in loc_lower
             
-            # --- THE NEW OLD-FILTER LOGIC ---
             # Instead of looking for "14-day-old logs", the Old filter looks strictly at 
             # the Active Inventory to find 14-day-old samples. Since closed items 
             # are deleted from inventory, this is bulletproof!
@@ -680,6 +697,7 @@ class LogViewerWindow:
             if search_terms and not all(term in row_str for term in search_terms): continue
             
             display_row = list(row)
+            display_row[0] = display_date
             display_row[2] = str(display_row[2]).replace('LOC:', '').replace('LOC-', '').strip()
             item_id = str(display_row[3]) if len(display_row) > 3 else ""
             
