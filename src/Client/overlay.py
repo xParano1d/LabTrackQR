@@ -1,16 +1,21 @@
 # overlay.py (CLIENT VERSION)
 import customtkinter as ctk
-ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # THE MASTER FIX
+ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True
 
 import sys
 import os
+import time
 import ctypes
 import qrcode
-import tkinter as tk
-import threading
+import winreg
+import winsound
 import requests
+import threading
+import tkinter as tk
+from datetime import datetime
 from PIL import Image, ImageTk
 from logviewer import LogViewerWindow
+from ctkfontawesome import icon_to_ctkimage
 
 try:
     myappid = 'labtrack.qr.desktop.app.1' 
@@ -28,7 +33,6 @@ def resource_path(file_name):
 
 def get_theme_icon():
     try:
-        import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
         value, _ = winreg.QueryValueEx(key, "SystemUsesLightTheme")
         winreg.CloseKey(key)
@@ -105,22 +109,27 @@ class NotificationManager:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
             def ping_server():
                 try:
-                    # 5 second timeout
-                    resp = requests.get(f"{target_url}/api/ping", timeout=5) 
+                    # 3 second timeout
+                    resp = requests.get(f"{target_url}/api/ping", timeout=3) 
                     if resp.status_code == 200:
                         self.failed_pings = 0  # Reset strikes on success!
                         if getattr(self.storage, 'is_offline_mode', False):
                             self.storage.is_offline_mode = False
-                            import winsound
+
                             winsound.MessageBeep(winsound.MB_ICONASTERISK)
                             self.message_queue.put("SERVER CONNECTED \nOnline mode active.\nSyncing data in background...")
+                            
+                            # --- Re-run stale check on reconnect ---
+                            active_user = getattr(self, 'last_known_user', None)
+                            if active_user:
+                                threading.Thread(target=self.run_stale_check, args=(active_user,), daemon=True).start()
                 except Exception:
                     # 2-Strike Rule
                     self.failed_pings = getattr(self, 'failed_pings', 0) + 1
                     if self.failed_pings >= 2:
                         if not getattr(self.storage, 'is_offline_mode', True):
                             self.storage.is_offline_mode = True
-                            import winsound
+
                             winsound.MessageBeep(winsound.MB_ICONHAND)
                             self.message_queue.put("CONNECTION LOST\nSwitched to Offline Mode.\nData will be saved locally.")
 
@@ -162,6 +171,7 @@ class NotificationManager:
             
             if getattr(self, 'last_known_user', None) != active_user:
                 self.last_known_user = active_user
+                
                 # Push the new user to all open windows instantly
                 for win in self.active_log_windows:
                     if win.viewer.winfo_exists():
@@ -169,6 +179,10 @@ class NotificationManager:
                         # If "My Samples" is clicked, force a live visual refresh!
                         if hasattr(win, 'active_filters') and "MAGIC_ME_FILTER" in win.active_filters:
                             win.execute_search()
+                
+                # --- Run stale check automatically for the new user! ---
+                if active_user:
+                    threading.Thread(target=self.run_stale_check, args=(active_user,), daemon=True).start()
 
         while not self.message_queue.empty():
             msg = self.message_queue.get()
@@ -233,7 +247,7 @@ class NotificationManager:
             win.current_user = active_user
 
         if len(self.active_log_windows) >= 2:
-            import winsound
+            
             winsound.MessageBeep(winsound.MB_ICONHAND)
             self.spawn_notification("Window Limit Reached:\nMaximum of 2 log windows allowed.")
 
@@ -252,28 +266,40 @@ class NotificationManager:
         viewer_instance = LogViewerWindow(self.root, self.storage, viewer_router, is_server=False, current_user=active_user, initial_filters=initial_filters)
         self.active_log_windows.append(viewer_instance)
 
-    def start_stale_check(self, current_user_name):
-        from datetime import datetime
-        def run_check():
-            try:
-                target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
-                response = requests.get(f"{target_url}/api/view_data", params={"source": "inventory"}, timeout=5)
-                if response.status_code == 200:
-                    data = response.json().get("results", [])
-                    stale_count = 0
-                    now = datetime.now()
-                    for row in data:
-                        if len(row) >= 8 and row[7].lower() == current_user_name.lower() and "removed" not in row[2].lower() and "closed" not in row[2].lower():
-                            try:
-                                row_date = datetime.strptime(str(row[0]), "%Y-%m-%d")
-                                if (now - row_date).days >= 14:
-                                    stale_count += 1
-                            except Exception: pass
-                    if stale_count > 0:
-                        self.show_hard_stop_popup(stale_count, current_user_name)
-            except Exception: pass
-            self.root.after(900000, run_check)
-        self.root.after(5000, run_check)
+    def run_stale_check(self, current_user_name):
+        time.sleep(2) # Give the background cache a second to load if we just booted
+        
+        if not current_user_name: return
+        
+        # --- 1-PER-DAY LIMITER ---
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if self.stale_notified_today.get(current_user_name) == today_str:
+            return # We already annoyed this user today! Stop here.
+            
+        # Use Local Cache! Instant and works offline.
+        data = self.storage.get_inventory_data()
+        if not data: return 
+        
+        stale_count = 0
+        now = datetime.now()
+        for row in data:
+            if len(row) >= 8 and row[7].lower() == current_user_name.lower():
+                loc_lower = str(row[2]).lower()
+                if "removed" not in loc_lower and "closed" not in loc_lower:
+                    try:
+                        # Use the same robust date parsing we built for LogViewer
+                        raw_date_str = str(row[0]).strip()[:10]
+                        if "." in raw_date_str: row_date = datetime.strptime(raw_date_str, "%d.%m.%Y")
+                        elif "-" in raw_date_str and len(raw_date_str) > 2 and raw_date_str[2] == "-": row_date = datetime.strptime(raw_date_str, "%d-%m-%Y")
+                        else: row_date = datetime.strptime(raw_date_str, "%Y-%m-%d")
+                        
+                        if (now - row_date).days >= 14:
+                            stale_count += 1
+                    except Exception: pass
+                    
+        if stale_count > 0:
+            self.stale_notified_today[current_user_name] = today_str # Mark as notified today!
+            self.root.after(0, lambda: self.show_hard_stop_popup(stale_count, current_user_name))
 
     def show_hard_stop_popup(self, count, current_user_name):
         popup = tk.Toplevel(self.root)
@@ -359,7 +385,7 @@ class NotificationManager:
         btn_frame = ctk.CTkFrame(win, fg_color="transparent")
         btn_frame.pack(pady=5)
         ctk.CTkButton(btn_frame, text="Yes, Switch", command=confirm, fg_color="#f39c12", hover_color="#d68910", font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
-        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"], hover_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"], font=("Segoe UI", 12, "bold"), width=100).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color="#555555", hover_color="#777777", font=("Segoe UI", 12, "bold"), width=100).pack(side=tk.LEFT, padx=10)
 
     def open_register_badge(self, badge_id=None, ad_username=""):
         reg_win = tk.Toplevel(self.root)
@@ -417,14 +443,12 @@ class NotificationManager:
 
                 self.spawn_notification(f"Registered Successfully:\n{full_name}")
                 reg_win.destroy()
-                if ad_username:
-                    self.start_stale_check(full_name)
                 
         def cancel(): reg_win.destroy()
             
         btn_frame = ctk.CTkFrame(reg_win, fg_color="transparent")
         btn_frame.pack(pady=20)
-        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"], hover_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"], font=("Segoe UI", 12, "bold"), width=100).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color="#555555", hover_color="#777777", font=("Segoe UI", 12, "bold"), width=100).pack(side=tk.LEFT, padx=10)
         ctk.CTkButton(btn_frame, text="Assign & Save", command=save_badge, fg_color=["#217346", "#09ce66"], hover_color=["#2a8f57", "#2EFAD9"], font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
 
     def open_employee_directory(self):
@@ -513,7 +537,6 @@ class NotificationManager:
         if not active_users:
             if self.scanner_mgr:
                 self.scanner_mgr.removal_mode = False 
-            import winsound
             winsound.MessageBeep(winsound.MB_ICONHAND)
             self.spawn_notification("Access Denied:\nPlease log in to a scanner first.")
             return
@@ -542,7 +565,7 @@ class NotificationManager:
 
         ctk.CTkButton(win, text="Cancel", command=cancel, fg_color="#d9534f", hover_color="#c9302c", font=("Segoe UI", 12, "bold"), width=120).pack(pady=10)
 
-    def open_removal_confirmation(self, sample_id, action_user, sample_name):
+    def open_removal_confirmation(self, sample_id, action_user, sample_details):
         win = tk.Toplevel(self.root)
         win.title("Confirm Removal")
         win.overrideredirect(True)
@@ -550,16 +573,16 @@ class NotificationManager:
         win.configure(bg=bg_color, highlightthickness=3, highlightbackground="#d9534f", highlightcolor="#d9534f")
         win.attributes("-topmost", True)
 
-        self.center_window(win, 400, 230)
+        self.center_window(win, 400, 250)
 
-        ctk.CTkLabel(win, text="Warning", text_color="#d9534f", font=("Segoe UI", 18, "bold")).pack(pady=(15, 2))
-        ctk.CTkLabel(win, text="Permanently remove:", font=("Segoe UI", 13)).pack()
-        ctk.CTkLabel(win, text=f"{sample_name}", font=("Segoe UI", 14, "bold"), wraplength=380).pack(pady=2)
-        ctk.CTkLabel(win, text=f"({sample_id})", text_color=["#666666", "#aaaaaa"], font=("Segoe UI", 11)).pack()
+        ctk.CTkLabel(win, text="WARNING", text_color="#d9534f", font=("Segoe UI", 18, "bold")).pack(pady=(15, 2))
+        ctk.CTkLabel(win, text="Do you want to PERNAMENTLY Remove:", font=("Segoe UI", 13)).pack()
+        ctk.CTkLabel(win, text=f"ID:{sample_id}", font=("Segoe UI", 14, "bold"), wraplength=380).pack(pady=2)
+        ctk.CTkLabel(win, text=f"{sample_details}", text_color=["#666666", "#aaaaaa"], font=("Segoe UI", 11), width=200).pack(pady=(2, 10))
         
-        ctk.CTkButton(win, text=action_user, text_color=["#d9534f", "#ff6b6b"], font=("Segoe UI", 13, "bold"), width=280, height=32,fg_color=["#f9e6e6", "#4a1c1c"], border_width=2, border_color="#d9534f", corner_radius=4,hover=False).pack(pady=5)
+        ctk.CTkButton(win, text=action_user, text_color=["#d9534f", "#ff6b6b"], font=("Segoe UI", 13, "bold"), width=280, height=32,fg_color=["#f9e6e6", "#4a1c1c"], border_width=2, border_color="#d9534f", corner_radius=4,hover=False).pack(pady=(5, 12))
 
-        timeout_id = win.after(20000, lambda: cancel())
+        timeout_id = win.after(30000, lambda: cancel())
 
         def confirm():
             win.after_cancel(timeout_id)
@@ -576,7 +599,7 @@ class NotificationManager:
         btn_frame = ctk.CTkFrame(win, fg_color="transparent")
         btn_frame.pack(pady=5)
         ctk.CTkButton(btn_frame, text="Confirm", command=confirm, fg_color="#d9534f", hover_color="#c9302c", font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
-        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"], hover_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"], font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
+        ctk.CTkButton(btn_frame, text="Cancel", command=cancel, fg_color="#555555", hover_color="#777777", font=("Segoe UI", 12, "bold"), width=120).pack(side=tk.LEFT, padx=10)
 
     def open_new_sample_form(self):
         active_users = []
@@ -589,7 +612,7 @@ class NotificationManager:
             active_users.append(self.scanner_mgr.ad_fallback_name)
 
         if not active_users:
-            import winsound
+            
             winsound.MessageBeep(winsound.MB_ICONHAND)
             self.spawn_notification("Access Denied:\nPlease log in to a scanner first.")
             return
@@ -711,16 +734,28 @@ class NotificationManager:
         elif "automatically signed in" in text_lower or "login successful" in text_lower:
             theme_color = ["#09ce66", "#09ce66"] 
             icon_name = "user"
-        elif "unsaved samples cleared" in text_lower:
-            theme_color = ["#09ce66", "#09ce66"] 
-            icon_name = "broom"
+        elif "cleared" in text_lower:
+            theme_color = theme_accent
+            icon_name = "eraser"
         elif "copied" in text_lower:
             theme_color = theme_accent 
             icon_name = "copy"
+        elif "queued" in text_lower:
+            theme_color = theme_accent 
+            icon_name = "hourglass-2"
+        elif"location set" in text_lower:
+            theme_color = theme_accent 
+            icon_name = "location-pin"
+        elif "online" in text_lower:
+            theme_color = ['#06B6D4', '#06B6D4']
+            icon_name = "network-wired"
+        elif "offline" in text_lower:
+            theme_color = ["#d9534f", "#d9534f"]
+            icon_name = "chain-slash"
         elif "removal mode cancelled" in text_lower:
             theme_color = ["#f39c12", "#f39c12"] 
-            icon_name = "warning"
         elif any(w in text_lower for w in ["remove", "removed", "removal"]):
+            icon_name = "warning"
             theme_color = ["#d9534f", "#d9534f"] 
             icon_name = "trash-can"
         elif any(w in text_lower for w in ["denied", "failed", "lost", "error"]):
@@ -751,7 +786,6 @@ class NotificationManager:
 
         # 5. Dynamic Iconography
         try:
-            from ctkfontawesome import icon_to_ctkimage
             mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
             icon_img = icon_to_ctkimage(icon_name, fill=theme_color[mode_idx], scale_to_width=34)
             icon_lbl = ctk.CTkLabel(top_frame, text="", image=icon_img, width=40)

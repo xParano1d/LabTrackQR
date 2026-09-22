@@ -46,6 +46,25 @@ def set_autostart(enable):
         winreg.CloseKey(key)
     except Exception as e: print(f"Registry Error: {e}")
 
+# --- THEME REGISTRY LOGIC ---
+THEME_REG_PATH = r"Software\LabTrackQR"
+
+def save_theme_preference(theme_name):
+    try:
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, THEME_REG_PATH)
+        winreg.SetValueEx(key, "Theme", 0, winreg.REG_SZ, theme_name)
+        winreg.CloseKey(key)
+    except Exception: pass
+
+def load_theme_preference():
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, THEME_REG_PATH, 0, winreg.KEY_READ)
+        value, _ = winreg.QueryValueEx(key, "Theme")
+        winreg.CloseKey(key)
+        return value
+    except FileNotFoundError:
+        return None
+
 def is_autostart_enabled():
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_READ)
@@ -79,9 +98,10 @@ def setup_tray(root, api_server):
     def toggle_theme(icon, item):
         current_mode = ctk.get_appearance_mode()
         new_mode = "Light" if current_mode == "Dark" else "Dark"
+        save_theme_preference(new_mode)
         ctk.set_appearance_mode(new_mode)
         icon.update_menu() # Forces the tray text to refresh instantly!
-
+    
     def get_theme_text(item):
         return "Change theme to Light" if ctk.get_appearance_mode() == "Dark" else "Change theme to Dark"
 
@@ -204,6 +224,11 @@ def get_master_directory():
     return get_master_directory()
 
 if __name__ == "__main__":
+    # --- LOAD SAVED THEME BEFORE UI SPAWNS ---
+    saved_theme = load_theme_preference()
+    if saved_theme in ["Dark", "Light"]:
+        ctk.set_appearance_mode(saved_theme)
+
     mutex_name = "Global\\LabTrackQR_Server_Instance_Lock"
     mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
     

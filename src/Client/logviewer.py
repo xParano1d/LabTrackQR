@@ -11,6 +11,7 @@ import ctypes
 import threading
 import requests
 import re
+import winreg
 from PIL import Image
 from datetime import datetime
 
@@ -23,14 +24,10 @@ def resource_path(file_name):
         return os.path.join(script_dir, "..", "..", "img", file_name)
 
 def get_theme_icon():
-    try:
-        import winreg
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
-        value, _ = winreg.QueryValueEx(key, "SystemUsesLightTheme")
-        winreg.CloseKey(key)
-        return "icon_white.ico" if value == 0 else "icon_black.ico"
-    except Exception:
+    if ctk.get_appearance_mode() == "Dark":
         return "icon_white.ico"
+    else:
+        return "icon_black.ico"
 
 class LogViewerWindow:
     def __init__(self, parent_root, storage, notify_callback, is_server=False, current_user="", initial_search="", initial_filters=None):
@@ -195,7 +192,7 @@ class LogViewerWindow:
 
         self.hamburger_btn = ctk.CTkButton(
             self.top_frame, image=self.icon_menu, text="", width=40,
-            command=self.toggle_hamburger_menu, fg_color="transparent"
+            command=self.toggle_hamburger_menu, fg_color=["#00386C", "#0E8187"]
         )
         
         self.collapsed_title = ctk.CTkLabel(self.top_frame, text="System Logs & Inventory", font=("Segoe UI", 16, "bold"))
@@ -329,7 +326,7 @@ class LogViewerWindow:
         self.history_btn.pack(side=tk.LEFT, padx=5)
         self.b4.pack(side=tk.LEFT, padx=5)
         
-        self.dropdown_frame = ctk.CTkFrame(self.viewer, border_width=1, width=260)
+        self.dropdown_frame = ctk.CTkFrame(self.viewer, border_width=2, border_color=["#00386C", "#0E8187"], width=180, height=160)
         self.dropdown_frame.pack_propagate(False)
         
         self.d1 = ctk.CTkButton(self.dropdown_frame, text="View Active Inventory", command=lambda: self.switch_view('inventory'))

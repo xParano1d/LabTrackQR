@@ -14,11 +14,11 @@
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 ✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
 ✘ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe @cancelled (9/18/2026, 10:35:29 AM)
-☐ Mapped storage??? like visualization of storage and where things are etc. @critical 
+☐ storage map creator and viewer like visualization of storage and where things are etc. @critical @today
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
 ✔ dark/white theme switch (make sure icons and top bar colors are correct) @today @done (9/21/2026, 11:50:09 PM)
-☐ animate blinking for error and action reqiured popups @low
+☐ animate blinking for error and action reqiured popups @low @today 
 ✔ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) ??? @today @done (9/17/2026, 2:55:49 PM)
 ✔ close manage employee badges after successfull relogin @low @done (9/18/2026, 12:13:56 PM)
 ✔ too fast scan of location->smp takes smp:{id} string to location name @critical @today @done (9/21/2026, 2:32:33 PM)
@@ -27,10 +27,12 @@
 ✔ fix bug with removal mode being bypassed by scanning sample not from system or wrong qr code and popup cancel message needs to be edited @high @done (9/22/2026, 8:56:59 AM)
 ✔ fix a bug when saving file corrupts it when saved with new records with polish characters inserted manually by editing .csv in history? on server only?? idk @critical @done (9/22/2026, 10:20:29 AM)
 ✔ fix logviewer poor session handling (initial user is only considered when it should be just adaptable to whoever is logged in) @critical @done (9/22/2026, 10:50:13 AM)
-☐ fix relog old sample popup missing @high
-☐ fix old sample notification coming up AGAIN after a while
-☐ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again) @high
+✔ fix relog old sample popup missing @high @done (9/22/2026, 12:31:18 PM)
+✔ fix old sample notification coming up AGAIN after a while @done (9/22/2026, 12:31:22 PM)
+✔ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again) @high @done (9/22/2026, 12:31:26 PM)
+✔ fix relog cancel button and logviewer hamburger menu button visibility @done (9/22/2026, 1:46:10 PM)
 ☐ fix form validation red background for entries that are wrong @low
+☐ bug in reloging top left corner popup instead of left bottom @today
 tkinter to cutom tkinter elements changes:
     ✘ manage employee badges, add new sample change from optionMenu to comboBox for search and move func dept to bottom (above initialize sample button) @cancelled (9/18/2026, 12:06:07 PM)
     ✔ removal mode cancel button change @done (9/18/2026, 1:47:51 PM)
@@ -39,7 +41,6 @@ tkinter to cutom tkinter elements changes:
     ✔ popups/notfication change style @today @done (9/21/2026, 11:00:26 AM)
     ✔ make every color fetched from BW_theme.json to make it more responsive to theme changes @done (9/21/2026, 11:22:30 AM)
     ✔ manage employees fix combo box broken color change on button hover @done (9/21/2026, 11:44:46 AM)
-    ☐ random texts change color to match theme
 ✔ Whole History Viewer (because rn you can only see actual month history) OPTIMIZATION NEEDED (server recives client queries) @critical @today @done (9/7/2026, 11:28:12 AM)
 ✔ deep search allowing to search for history of everything in the lab @done (9/7/2026, 11:27:49 AM)
 ✔ Log Viewer Search Filters and small rework (it has to be functional and more user friendly) @low @today @done (9/8/2026, 3:08:22 PM)
@@ -56,8 +57,9 @@ tkinter to cutom tkinter elements changes:
 ✔ fix a bug with weird behaviour after first time registration @done (9/15/2026, 9:47:27 AM)
 ✔ fix a bug with open in external editor polish characters displayed wrong @done (9/15/2026, 9:03:31 AM)
 ✔ change naming a bit (Pending-Storage -> verification queue | action removed -> request closed) @done (9/15/2026, 9:30:26 AM)
-✘ fix autorefresh @cancelled (9/15/2026, 9:30:34 AM) (it works for inventory only and if you want you can F5 your logs)
+☐ fix autorefresh (sometimes i feel like it does't even exist with current logic) @today
 ✔ log viewer bring newest instance to top clicking 3rd time in tray @done (9/15/2026, 10:20:57 AM)
+✘ About Tab for licenses and used things in app??????? @low @cancelled (9/22/2026, 11:38:59 AM)
 ✔ SERVER AND CLIENT SEPARATION @today @done (9/3/2026, 3:54:06 PM)
 SERVER:
     ✔ Server configuration after first launch (path etc.) [and some protection if path is not present then point to config again] @done (9/3/2026, 3:54:46 PM)
@@ -68,25 +70,20 @@ SERVER:
     ✔ remove "LOC:" from location data in the csv storage @critical @done (9/8/2026, 10:10:07 AM)
     ✔ live user counter based ping heartbeat @done (9/9/2026, 12:36:32 PM)
     ✔ clicking tray option for manage employee bring the window to the top of the screen @done (9/15/2026, 10:12:30 AM)
+    ☐ create backup on server's local folders (at %localappdata%\LabTrackQR\Backup) @critical @today
 CLIENT:
     ✔ doesnt create folders @done (9/3/2026, 3:56:11 PM)
     ✔ only read write existing log files [and some protection if path is not present then point to config again] @done (9/3/2026, 3:56:15 PM)
     ✘ pop-up account synchronization (session sharing flask username = request.environ.get('REMOTE_USER') if username then login else access denied) @cancelled (9/3/2026, 11:22:53 AM)
     ✔ one and more login sessions handling @done (9/4/2026, 12:36:12 PM)
     ✔ automatic reloging to AD user after 5 min of inactivity after reloging user @done (9/4/2026, 1:09:53 PM)
-☐ config variables expansion
+    ☐ increase form to normal form for digits/letters etc. (-_()) @critical windows ad setup change 8 digits only
+☐ config variables expansion @low 
+☐ prepare instruction for scanner configuration, user manual and documentation @critical
 
         
 Excel data integration:
     ✔ restruct whole inventory and history logs with new columns headers and storage @today @done (9/15/2026, 1:53:35 PM)
-    ☐ "materials laboratory request" fetch only and create samples automatically
-    ☐ add duplicates prevention when adding automatically
+    ✘ "materials laboratory request" fetch only and create samples automatically @cancelled (9/22/2026, 2:54:26 PM)
+    ✘ add duplicates prevention when adding automatically @cancelled (9/22/2026, 2:54:30 PM)
     ✘ qr printer automation if possible @cancelled (9/18/2026, 10:05:45 AM)
-    
-stuff to consider:
-☐ security regarding only one copy of logviewer that everyone has access to and could easly edit/delete/corrupt
-    |___backup on labshare local folders (at %localappdata%\LabTrackQR\Backup) @critical 
-☐ 6 digit sample id lock (WILL GEMS NUMBER EVER END? now its at 923939 meaning 76061 left????)
-    |___increase form to normal form for digits/letters etc. (-_()) @critical windows ad setup change 8 digits only
-☐ About Tab for licenses and used things in app??????? @low
-☐ prepare instruction for scanner configuration and user manual @critical

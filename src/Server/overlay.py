@@ -343,16 +343,28 @@ class NotificationManager:
         elif "automatically signed in" in text_lower or "login successful" in text_lower:
             theme_color = ["#09ce66", "#09ce66"] 
             icon_name = "user"
-        elif "unsaved samples cleared" in text_lower:
-            theme_color = ["#09ce66", "#09ce66"] 
-            icon_name = "broom"
+        elif "cleared" in text_lower:
+            theme_color = theme_accent
+            icon_name = "eraser"
         elif "copied" in text_lower:
             theme_color = theme_accent 
             icon_name = "copy"
+        elif "queued" in text_lower:
+            theme_color = theme_accent 
+            icon_name = "hourglass-2"
+        elif"location set" in text_lower:
+            theme_color = theme_accent 
+            icon_name = "location-pin"
+        elif "online" in text_lower:
+            theme_color = ['#06B6D4', '#06B6D4']
+            icon_name = "network-wired"
+        elif "offline" in text_lower:
+            theme_color = ["#d9534f", "#d9534f"]
+            icon_name = "chain-slash"
         elif "removal mode cancelled" in text_lower:
             theme_color = ["#f39c12", "#f39c12"] 
-            icon_name = "warning"
         elif any(w in text_lower for w in ["remove", "removed", "removal"]):
+            icon_name = "warning"
             theme_color = ["#d9534f", "#d9534f"] 
             icon_name = "trash-can"
         elif any(w in text_lower for w in ["denied", "failed", "lost", "error"]):

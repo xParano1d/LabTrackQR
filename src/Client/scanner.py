@@ -199,8 +199,8 @@ class ScannerNode:
                                         self.message_queue.put("COMMAND:FORCE_CLOSE_REMOVAL_WIN")
                                         continue
                                     
-                                    sample_name = self.storage.get_sample_name(scanned_text)
-                                    self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}|{self.user}|{sample_name}")
+                                    sample_proj = self.storage.get_sample_details(scanned_text)
+                                    self.message_queue.put(f"COMMAND:CONFIRM_REMOVE:{scanned_text}|{self.user}|{sample_proj}")
                                     self.manager.removal_mode = False 
                                     self.message_queue.put("COMMAND:FORCE_CLOSE_REMOVAL_WIN")
                                     continue

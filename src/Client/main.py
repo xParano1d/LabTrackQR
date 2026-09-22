@@ -62,6 +62,25 @@ def is_autostart_enabled():
     except FileNotFoundError:
         return False
 
+# --- THEME REGISTRY LOGIC ---
+THEME_REG_PATH = r"Software\LabTrackQR"
+
+def save_theme_preference(theme_name):
+    try:
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, THEME_REG_PATH)
+        winreg.SetValueEx(key, "Theme", 0, winreg.REG_SZ, theme_name)
+        winreg.CloseKey(key)
+    except Exception: pass
+
+def load_theme_preference():
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, THEME_REG_PATH, 0, winreg.KEY_READ)
+        value, _ = winreg.QueryValueEx(key, "Theme")
+        winreg.CloseKey(key)
+        return value
+    except FileNotFoundError:
+        return None
+
 # --- DETECT TASKBAR THEME ---
 def is_taskbar_dark_mode():
     try:
@@ -96,6 +115,7 @@ def setup_tray(root, scanner_mgr):
     def toggle_theme(icon, item):
         current_mode = ctk.get_appearance_mode()
         new_mode = "Light" if current_mode == "Dark" else "Dark"
+        save_theme_preference(new_mode)
         ctk.set_appearance_mode(new_mode)
         icon.update_menu()
 
@@ -139,6 +159,11 @@ def notify_func(*args):
             app.spawn_notification(action)
 
 if __name__ == "__main__":
+    # --- LOAD SAVED THEME BEFORE UI SPAWNS ---
+    saved_theme = load_theme_preference()
+    if saved_theme in ["Dark", "Light"]:
+        ctk.set_appearance_mode(saved_theme)
+        
     mutex_name = "Global\\LabTrackQR_Client_Instance_Lock"
     mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
 
@@ -176,8 +201,5 @@ if __name__ == "__main__":
 
     app = NotificationManager(message_queue, storage, scanner_mgr)
     threading.Thread(target=setup_tray, args=(app.root, scanner_mgr), daemon=True).start()
-
-    if scanner_mgr.ad_fallback_name and not storage.is_offline_mode:
-        app.start_stale_check(scanner_mgr.ad_fallback_name)
-
+    
     app.run()   

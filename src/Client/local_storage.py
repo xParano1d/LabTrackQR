@@ -142,14 +142,14 @@ class ApiStorage:
             except Exception: pass
         return False
 
-    def get_sample_name(self, sample_id):
+    def get_sample_details(self, sample_id):
         with self.lock:
             try:
                 with open(self.cache_file, 'r') as f: cache = json.load(f)
                 for row in cache:
                     # Look at row[4] and row[6] to build the nice UI string!
                     if len(row) >= 7 and row[3] == sample_id: 
-                        return f"Req: {row[4]} | Proj: {row[6]}"
+                        return f"Requestor: {row[4]}\nProject Number: {row[6]}"
             except Exception: pass
         return "Unknown Sample"
 
