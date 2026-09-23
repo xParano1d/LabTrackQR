@@ -94,7 +94,9 @@ def setup_tray(root, api_server):
 
     def trigger_log_viewer(icon, item): message_queue.put("COMMAND:OPEN_LOG_VIEWER")
     def trigger_user_manager(icon, item): message_queue.put("COMMAND:OPEN_USER_MANAGER")
-    
+    def trigger_user_manager(icon, item): message_queue.put("COMMAND:OPEN_USER_MANAGER")
+    def trigger_recovery_center(icon, item): message_queue.put("COMMAND:OPEN_RECOVERY_CENTER")
+
     def toggle_theme(icon, item):
         current_mode = ctk.get_appearance_mode()
         new_mode = "Light" if current_mode == "Dark" else "Dark"
@@ -115,9 +117,11 @@ def setup_tray(root, api_server):
         os._exit(0)
             
     menu = pystray.Menu(
-        pystray.MenuItem("View Logs History", trigger_log_viewer), 
+        pystray.MenuItem("View Logs and History", trigger_log_viewer), 
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Employees Management", trigger_user_manager),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Backup and Recovery", trigger_recovery_center),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem(get_theme_text, toggle_theme),
         pystray.MenuItem("Run on Windows Startup", toggle_autostart, checked=lambda item: state['autostart']),
@@ -130,7 +134,7 @@ def setup_tray(root, api_server):
             time.sleep(2)
             if api_server:
                 count = api_server.get_active_client_count()
-                icon.title = f"Live Clients: {count} | LabTrack Server"
+                icon.title = f"LabTrack Server | Live Clients: {count}"
                 icon.update_menu()
 
     threading.Thread(target=tray_updater, daemon=True).start()

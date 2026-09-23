@@ -6,6 +6,8 @@ import sys
 import os
 import ctypes
 import tkinter as tk
+import winreg
+import threading
 from PIL import Image, ImageTk
 from tkinter import ttk, messagebox
 from logviewer import LogViewerWindow
@@ -26,13 +28,12 @@ def resource_path(file_name):
 
 def get_theme_icon():
     try:
-        import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
         value, _ = winreg.QueryValueEx(key, "SystemUsesLightTheme")
         winreg.CloseKey(key)
         return "icon_white.ico" if value == 0 else "icon_black.ico"
     except Exception:
-        return "icon_white.ico"
+        return "iconApp.ico"
 
 class NotificationManager:
     def __init__(self, message_queue, storage=None, scanner_mgr=None):
@@ -73,6 +74,40 @@ class NotificationManager:
         
         window.geometry(f"{width}x{height}+{x}+{y}")
 
+    def _apply_window_theme(self, window):
+        """Applies OS Taskbar icon, App Title Bar icon, and native header colors."""
+        try:
+            window.update() 
+            
+            # 1. OS Taskbar Icon
+            os_icon_path = resource_path(get_theme_icon())
+            window.iconbitmap(os_icon_path)
+            
+            # 2. App-Theme Title Bar Icon
+            is_light_app = ctk.get_appearance_mode() == "Light"
+            app_icon_path = resource_path("icon_black.ico" if is_light_app else "icon_white.ico")
+            
+            hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+            hIconSmall = ctypes.windll.user32.LoadImageW(0, app_icon_path, 1, 16, 16, 0x0010)
+            if hIconSmall:
+                ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 0, hIconSmall)
+                
+            # 3. Native Title Bar Colors
+            mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
+            rendering_policy = ctypes.c_int(2 if mode_idx == 1 else 1)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(rendering_policy), 4)
+
+            bg_hex = ctk.ThemeManager.theme["CTk"]["fg_color"][mode_idx]
+            text_hex = ctk.ThemeManager.theme["CTkLabel"]["text_color"][mode_idx]
+
+            def hex_to_bgr(hex_str):
+                c = int(hex_str.replace("#", ""), 16)
+                return (c & 0xFF) << 16 | (c & 0xFF00) | (c >> 16)
+
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 35, ctypes.byref(ctypes.c_int(hex_to_bgr(bg_hex))), 4)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 36, ctypes.byref(ctypes.c_int(hex_to_bgr(text_hex))), 4)
+        except Exception: pass
+
     def show_splash_screen(self):
         # --- DYNAMIC THEME COLORS ---
         mode = 1 if ctk.get_appearance_mode() == "Dark" else 0
@@ -89,24 +124,43 @@ class NotificationManager:
         self.center_window(splash, 400, 240)
         
         try:
-            # Dynamically loads icon_white.ico or icon_black.ico!
-            original_img = Image.open(resource_path(get_theme_icon()))
+            # --- Hardcode internal logo to App Theme, not OS Theme ---
+            is_light_app = ctk.get_appearance_mode() == "Light"
+            logo_filename = "icon_black.ico" if is_light_app else "icon_white.ico"
+            
+            original_img = Image.open(resource_path(logo_filename))
             resized_img = original_img.resize((80, 80), Image.Resampling.LANCZOS)
             self.splash_logo = ImageTk.PhotoImage(resized_img)
             tk.Label(splash, image=self.splash_logo, bg=bg_color).pack(pady=(35, 0))
-        except Exception:
-            pass
+        except Exception: pass
 
         tk.Label(splash, text="LabTrackQR", bg=bg_color, fg=text_color, font=("Segoe UI", 26, "bold")).pack(pady=(5,0))
         tk.Label(splash, text="SERVER", bg=bg_color, fg=sub_text_color, font=("Segoe UI", 16, "italic bold")).pack(pady=(0,2))
         splash.after(2500, splash.destroy)
 
     def check_queue(self):
+        if getattr(self, 'current_app_theme', None) != ctk.get_appearance_mode():
+            self.current_app_theme = ctk.get_appearance_mode()
+            
+            # Repaint User Manager if open
+            if hasattr(self, 'user_mgr_win') and self.user_mgr_win and self.user_mgr_win.winfo_exists():
+                self._apply_window_theme(self.user_mgr_win)
+                
+            # Repaint Recovery Center if open
+            if hasattr(self, 'recovery_win') and self.recovery_win and self.recovery_win.winfo_exists():
+                self._apply_window_theme(self.recovery_win)
+                
+            # Repaint Employee Directory if open (Client)
+            if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
+                self._apply_window_theme(self.emp_dir_win)
+
         while not self.message_queue.empty():
             msg = self.message_queue.get()
             
             if msg == "COMMAND:OPEN_LOG_VIEWER": self.open_log_viewer(); continue
             if msg == "COMMAND:OPEN_USER_MANAGER": self.open_user_manager(); continue
+            if msg == "COMMAND:OPEN_RECOVERY_CENTER": self.open_recovery_center(); continue
+
             if isinstance(msg, str) and msg.startswith("COMMAND:"): continue
 
             if isinstance(msg, str):
@@ -145,13 +199,14 @@ class NotificationManager:
 
         win = ctk.CTkToplevel(self.root)
         self.user_mgr_win = win
-        win.title("User Management Dashboard")
+
+        win.withdraw()
+
+        win.title("User Management Center")
         win.current_editing_badge = None 
-        try:
-            win.after(200, lambda: win.iconbitmap(resource_path(get_theme_icon())))
-        except Exception: pass 
-        
+
         self.center_window(win, 780, 520)
+        self._apply_window_theme(win)
         
         try:
             hwnd = ctypes.windll.user32.GetParent(win.winfo_id())
@@ -315,10 +370,12 @@ class NotificationManager:
         btn_frame.pack(fill=tk.X, padx=25, pady=5)
 
         ctk.CTkButton(btn_frame, text="Save / Update", command=save_user, fg_color=["#217346", "#09ce66"], hover_color=["#2a8f57", "#2EFAD9"], font=("Segoe UI", 12, "bold")).pack(fill=tk.X, pady=3)
-        ctk.CTkButton(btn_frame, text="New User", command=prepare_new_user, fg_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_color"], hover_color=ctk.ThemeManager.theme["CTkSegmentedButton"]["unselected_hover_color"], font=("Segoe UI", 12, "bold")).pack(fill=tk.X, pady=3)
+        ctk.CTkButton(btn_frame, text="New User", command=prepare_new_user, fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"], hover_color=ctk.ThemeManager.theme["CTkButton"]["hover_color"], font=("Segoe UI", 12, "bold")).pack(fill=tk.X, pady=3)
         ctk.CTkButton(btn_frame, text="Delete User", command=delete_user, fg_color="#d9534f", hover_color="#c9302c", font=("Segoe UI", 12, "bold")).pack(fill=tk.X, pady=(25, 0))
 
         load_data()
+
+        win.after(250, lambda: [self._apply_window_theme(win), win.deiconify(), win.lift(), win.focus_force()])
 
     def spawn_notification(self, text):
         window = tk.Toplevel(self.root)
@@ -351,10 +408,10 @@ class NotificationManager:
             icon_name = "copy"
         elif "queued" in text_lower:
             theme_color = theme_accent 
-            icon_name = "hourglass-2"
+            icon_name = "flask"
         elif"location set" in text_lower:
             theme_color = theme_accent 
-            icon_name = "location-pin"
+            icon_name = "location-dot"
         elif "online" in text_lower:
             theme_color = ['#06B6D4', '#06B6D4']
             icon_name = "network-wired"
@@ -375,7 +432,7 @@ class NotificationManager:
             icon_name = "bell"
         elif any(w in text_lower for w in ["successful", "success", "saved", "registered"]):
             theme_color = ["#09ce66", "#09ce66"] 
-            icon_name = "floppy-disk"
+            icon_name = "circle-check"
         else:
             theme_color = theme_accent 
             icon_name = "info-circle"
@@ -472,6 +529,113 @@ class NotificationManager:
             if window.winfo_exists():
                 y_pos = base_y - (index * (window_height + 10))
                 window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
+
+    def open_recovery_center(self):
+        if hasattr(self, 'recovery_win') and self.recovery_win and self.recovery_win.winfo_exists():
+            self.recovery_win.lift()
+            self.recovery_win.focus_force()
+            return
+            
+        win = ctk.CTkToplevel(self.root)
+        self.recovery_win = win
+
+        win.withdraw()
+
+        win.title("System Recovery Center")
+        win.attributes("-topmost", True)
+        self.center_window(win, 540, 500)
+        
+        # --- APPLY PERFECT TITLE BAR / ICONS ---
+        self._apply_window_theme(win)
+        
+        # --- LOGVIEWER COLOR PALETTE ---
+        win_bg = win._apply_appearance_mode(ctk.ThemeManager.theme["CTk"]["fg_color"])
+        frame_bg = win._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+        win.configure(fg_color=win_bg)
+        
+        ctk.CTkLabel(win, text="System Recovery Center", font=("Segoe UI", 20, "bold")).pack(pady=(20, 5))
+        ctk.CTkLabel(win, text="Select a timestamp to safely restore the live inventory.", text_color="#d9534f", font=("Segoe UI", 12)).pack(pady=(0,15))
+        
+        tier_var = ctk.StringVar(value="Recent (Last Hour)")
+    
+        tier_seg = ctk.CTkSegmentedButton(win, values=["Recent (Last Hour)", "Hourly (Last 24h)", "Daily (Last 30 Days)"], variable=tier_var)
+        
+        list_frame = ctk.CTkScrollableFrame(win, width=460, height=260, fg_color=win_bg, border_width=1, border_color=["#cccccc", "#333333"])
+        
+        tier_seg.pack(padx=20, pady=(0, 10), fill=tk.X)
+        list_frame.pack(pady=5, fill=tk.BOTH, expand=True, padx=20)
+        
+        def populate_list(choice):
+            for widget in list_frame.winfo_children(): widget.destroy()
+            backups = self.storage.get_available_backups()
+            
+            if choice == "Recent (Last Hour)": key = 'recent'
+            elif choice == "Hourly (Last 24h)": key = 'hourly'
+            else: key = 'daily'
+            
+            items = backups.get(key, [])
+            if not items:
+                ctk.CTkLabel(list_frame, text="No backups available in this tier yet.", font=("Segoe UI", 12, "italic")).pack(pady=40)
+                return
+                
+            for index, b_path in enumerate(items):
+                # Strip the .zip extension for the UI display
+                folder_name = os.path.basename(b_path).replace(".zip", "")
+                parts = folder_name.split("_")
+                display_name = f"{parts[0]}   {parts[1].replace('-', ':')}" if len(parts) == 2 else folder_name
+                
+                # THE FIX: Alternate the row colors exactly like a data table!
+                row_bg_color = frame_bg if index % 2 == 0 else win_bg
+                
+                row = ctk.CTkFrame(list_frame, fg_color=row_bg_color, corner_radius=0)
+                row.pack(fill=tk.X, pady=1)
+                ctk.CTkLabel(row, text=display_name, font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT, padx=15, pady=8)
+                ctk.CTkButton(row, text="Restore", width=80, fg_color="#d9534f", hover_color="#c9302c", command=lambda p=b_path, d=display_name: confirm_restore(p, d)).pack(side=tk.RIGHT, padx=15)
+                              
+        tier_seg.configure(command=populate_list)
+        
+        def confirm_restore(b_path, display_name):
+            msg = f"Are you ABSOLUTELY sure you want to restore the database to:\n\n{display_name}\n\nThis will completely overwrite the current live inventory and cannot be undone!"
+            if messagebox.askyesno("CRITICAL WARNING", msg, parent=win):
+                
+                # 1. Spwan the Progress Bar Window
+                prog_win = ctk.CTkToplevel(self.root)
+                prog_win.title("Restoring Backup...")
+                prog_win.attributes("-topmost", True)
+                self.center_window(prog_win, 420, 180)
+                self._apply_window_theme(prog_win)
+                
+                ctk.CTkLabel(prog_win, text="Decompressing Archive...", font=("Segoe UI", 16, "bold")).pack(pady=(20, 10))
+                
+                progress_bar = ctk.CTkProgressBar(prog_win, width=320, progress_color=["#217346", "#09ce66"])
+                progress_bar.pack(pady=5)
+                progress_bar.set(0)
+                
+                status_lbl = ctk.CTkLabel(prog_win, text="Initializing...", font=("Segoe UI", 12, "italic"))
+                status_lbl.pack()
+                
+                # 2. Callback function to receive live extraction data
+                def update_progress(current, total, filename):
+                    prog_win.after(0, lambda: progress_bar.set(current / total))
+                    prog_win.after(0, lambda: status_lbl.configure(text=f"Extracting: {filename}"))
+                
+                # 3. Run the heavy ZIP extraction in a background thread!
+                def perform_restore():
+                    success = self.storage.restore_backup(b_path, update_progress)
+                    prog_win.after(500, prog_win.destroy) # Wait half a second at 100%
+                    
+                    if success:
+                        prog_win.after(0, lambda: self.spawn_notification(f"Database Restored to:\n{display_name}"))
+                        prog_win.after(0, win.destroy)
+                    else:
+                        prog_win.after(0, lambda: messagebox.showerror("Error", "Failed to restore backup.", parent=win))
+                        
+                threading.Thread(target=perform_restore, daemon=True).start()
+
+        populate_list(tier_var.get())
+        ctk.CTkButton(win, text="Close", command=win.destroy, fg_color="#555555", hover_color="#777777").pack(pady=15)
+
+        win.after(250, lambda: [self._apply_window_theme(win), win.deiconify(), win.lift(), win.focus_force()])
 
     def run(self):
         self.root.mainloop()

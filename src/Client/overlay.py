@@ -38,7 +38,7 @@ def get_theme_icon():
         winreg.CloseKey(key)
         return "icon_white.ico" if value == 0 else "icon_black.ico"
     except Exception:
-        return "icon_white.ico"
+        return "iconApp.ico"
 
 def fix_combo_hover(widget):
     normal_color = widget.cget("button_color")
@@ -109,8 +109,8 @@ class NotificationManager:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
             def ping_server():
                 try:
-                    # 3 second timeout
-                    resp = requests.get(f"{target_url}/api/ping", timeout=3) 
+                    # 5 second timeout
+                    resp = requests.get(f"{target_url}/api/ping", timeout=5) 
                     if resp.status_code == 200:
                         self.failed_pings = 0  # Reset strikes on success!
                         if getattr(self.storage, 'is_offline_mode', False):
@@ -152,8 +152,11 @@ class NotificationManager:
         self.center_window(splash, 400, 240)
         
         try:
-            # Dynamically loads icon_white.ico or icon_black.ico!
-            original_img = Image.open(resource_path(get_theme_icon()))
+            # --- Hardcode internal logo to App Theme, not OS Theme ---
+            is_light_app = ctk.get_appearance_mode() == "Light"
+            logo_filename = "icon_black.ico" if is_light_app else "icon_white.ico"
+            
+            original_img = Image.open(resource_path(logo_filename))
             resized_img = original_img.resize((80, 80), Image.Resampling.LANCZOS)
             self.splash_logo = ImageTk.PhotoImage(resized_img)
             tk.Label(splash, image=self.splash_logo, bg=bg_color).pack(pady=(35, 0))
@@ -407,6 +410,17 @@ class NotificationManager:
         ctk.CTkLabel(reg_win, text="8-Digit Badge ID:", font=("Segoe UI", 12, "bold")).pack(pady=(5, 2))
         entry_badge = ctk.CTkEntry(reg_win, font=("Segoe UI", 14), justify="center", width=220)
         entry_badge.pack(pady=3)
+        
+        def limit_badge_length(event):
+            content = entry_badge.get()
+            if len(content) > 8:
+                entry_badge.delete(8, tk.END)
+            elif not content.isdigit() and content != "":
+                entry_badge.delete(0, tk.END)
+                entry_badge.insert(0, ''.join(filter(str.isdigit, content)))
+                
+        entry_badge.bind("<KeyRelease>", limit_badge_length)
+        
         if badge_id:
             entry_badge.insert(0, badge_id)
             entry_badge.configure(state="disabled")
@@ -631,18 +645,18 @@ class NotificationManager:
         close_btn = ctk.CTkButton(form, text="✕", width=30, height=30, fg_color="transparent", text_color=["#999999", "#888888"], hover_color=["#ffcccc", "#662222"], command=form.destroy)
         close_btn.place(relx=1.0, x=-5, y=5, anchor="ne")
 
-        ctk.CTkLabel(form, text="Sample ID (6-Digit Number)", font=("Segoe UI", 12, "bold")).pack(pady=(15, 2))
+        ctk.CTkLabel(form, text="Sample ID", font=("Segoe UI", 12, "bold")).pack(pady=(15, 2))
         entry_id = ctk.CTkEntry(form, width=280, justify="center", font=("Segoe UI", 14))
         entry_id.pack(pady=5)
         
-        def limit_length(event):
+        def filter_sample_id(event):
             content = entry_id.get()
-            if len(content) > 6:
-                entry_id.delete(6, tk.END)
-            elif not content.isdigit() and content != "":
+            # Allow letters, digits, dashes, underscores, and parentheses
+            filtered = "".join(c for c in content if c.isalnum() or c in "-_()")
+            if content != filtered:
                 entry_id.delete(0, tk.END)
-                entry_id.insert(0, ''.join(filter(str.isdigit, content)))
-        entry_id.bind("<KeyRelease>", limit_length)
+                entry_id.insert(0, filtered)
+        entry_id.bind("<KeyRelease>", filter_sample_id)
 
         ctk.CTkLabel(form, text="Requestor Name", font=("Segoe UI", 12, "bold")).pack(pady=(5, 2))
         entry_req = ctk.CTkEntry(form, width=280, justify="center", font=("Segoe UI", 14))
@@ -678,10 +692,12 @@ class NotificationManager:
             entry_id.configure(fg_color=err_color)
             entry_req.configure(fg_color=err_color)
             entry_proj.configure(fg_color=err_color)
+            combo_dept.configure(fg_color=err_color)
             
         entry_id.bind("<Key>", reset_bg)
         entry_req.bind("<Key>", reset_bg)
         entry_proj.bind("<Key>", reset_bg)
+        combo_dept.bind("<Key>", reset_bg)
 
         def save_manual_entry():
             id_raw = entry_id.get().strip()
@@ -690,7 +706,7 @@ class NotificationManager:
             proj_val = entry_proj.get().strip().replace('\n', ' ').replace('\r', '')
             user_val = selected_user.get() 
             
-            if len(id_raw) == 6 and id_raw.isdigit() and req_val and dept_val and proj_val and user_val: 
+            if id_raw and req_val and dept_val and proj_val and user_val: 
                 if self.storage:
                     self.storage.save_data_async(
                         location_id="LOC: Verification Queue", 
@@ -705,9 +721,10 @@ class NotificationManager:
                 form.destroy()
             else:
                 err_color = ["#ffcccc", "#662222"]
-                if not id_raw or not id_raw.isdigit() or len(id_raw) != 6: entry_id.configure(fg_color=err_color)
+                if not id_raw: entry_id.configure(fg_color=err_color)
                 if not req_val: entry_req.configure(fg_color=err_color)
                 if not proj_val: entry_proj.configure(fg_color=err_color)
+                if not dept_val: combo_dept.configure(fg_color=err_color)
 
         ctk.CTkButton(form, text="Initialize Item", command=save_manual_entry, font=("Segoe UI", 13, "bold"), width=180).pack(pady=(20, 20))
 
@@ -742,10 +759,10 @@ class NotificationManager:
             icon_name = "copy"
         elif "queued" in text_lower:
             theme_color = theme_accent 
-            icon_name = "hourglass-2"
+            icon_name = "flask"
         elif"location set" in text_lower:
             theme_color = theme_accent 
-            icon_name = "location-pin"
+            icon_name = "location-dot"
         elif "online" in text_lower:
             theme_color = ['#06B6D4', '#06B6D4']
             icon_name = "network-wired"
@@ -766,7 +783,7 @@ class NotificationManager:
             icon_name = "bell"
         elif any(w in text_lower for w in ["successful", "success", "saved", "registered"]):
             theme_color = ["#09ce66", "#09ce66"] 
-            icon_name = "floppy-disk"
+            icon_name = "circle-check"
         else:
             theme_color = theme_accent 
             icon_name = "info-circle"

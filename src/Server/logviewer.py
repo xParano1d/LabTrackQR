@@ -24,10 +24,13 @@ def resource_path(file_name):
         return os.path.join(script_dir, "..", "..", "img", file_name)
 
 def get_theme_icon():
-    if ctk.get_appearance_mode() == "Dark":
-        return "icon_white.ico"
-    else:
-        return "icon_black.ico"
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+        value, _ = winreg.QueryValueEx(key, "SystemUsesLightTheme")
+        winreg.CloseKey(key)
+        return "icon_white.ico" if value == 0 else "icon_black.ico"
+    except Exception:
+        return "iconApp.ico"
 
 class LogViewerWindow:
     def __init__(self, parent_root, storage, notify_callback, is_server=False, current_user="", initial_search="", initial_filters=None):
@@ -62,7 +65,9 @@ class LogViewerWindow:
             self.viewer.after(200, lambda: self.viewer.iconbitmap(icon_path))
         except: pass
             
-        self._apply_dark_title_bar(self.viewer)
+        self.current_app_theme = ctk.get_appearance_mode()
+        self._update_window_theme_elements()
+        self.viewer.after(200, self._update_window_theme_elements)
         
         self.current_tab = ['inventory'] 
         self.current_history_target = [None, None] 
@@ -100,6 +105,29 @@ class LogViewerWindow:
         
         self.load_data(source, "", year=year, month=month)
 
+    def _update_window_theme_elements(self):
+        try:
+            # 1. Set BOTH icons (Taskbar & Titlebar) to the OS Theme first
+            os_icon_path = resource_path(get_theme_icon())
+            self.viewer.iconbitmap(os_icon_path)
+            
+            # 2. Use Windows API to specifically override ONLY the Title Bar icon (ICON_SMALL) with the App Theme
+            is_light_app = ctk.get_appearance_mode() == "Light"
+            app_icon_path = resource_path("icon_black.ico" if is_light_app else "icon_white.ico")
+            
+            hwnd = ctypes.windll.user32.GetParent(self.viewer.winfo_id())
+            
+            # LoadImageW arguments: 0=hInst, path, 1=IMAGE_ICON, 16=width, 16=height, 0x0010=LR_LOADFROMFILE
+            hIconSmall = ctypes.windll.user32.LoadImageW(0, app_icon_path, 1, 16, 16, 0x0010)
+            
+            if hIconSmall:
+                # SendMessageW arguments: 0x0080=WM_SETICON, 0=ICON_SMALL
+                ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 0, hIconSmall)
+                
+        except Exception: pass
+        
+        self._apply_dark_title_bar(self.viewer)
+
     def _apply_dark_title_bar(self, window):
         try:
             window.update() 
@@ -107,17 +135,19 @@ class LogViewerWindow:
             set_window_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
 
             DWMWA_USE_IMMERSIVE_DARK_MODE = 20
-            rendering_policy = ctypes.c_int(2)
+            mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
+            
+            # Switch Immersive Mode (1 = Light Mode, 2 = Dark Mode)
+            rendering_policy = ctypes.c_int(2 if mode_idx == 1 else 1)
             set_window_attribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(rendering_policy), ctypes.sizeof(rendering_policy))
 
             DWMWA_CAPTION_COLOR = 35
             DWMWA_TEXT_COLOR = 36
             
-            mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
             bg_hex = ctk.ThemeManager.theme["CTk"]["fg_color"][mode_idx]
             text_hex = ctk.ThemeManager.theme["CTkLabel"]["text_color"][mode_idx]
 
-            # Windows DWM requires BGR integer formats, not standard #RRGGBB Hex strings!
+            # Windows DWM requires BGR integer formats!
             def hex_to_bgr(hex_str):
                 c = int(hex_str.replace("#", ""), 16)
                 return (c & 0xFF) << 16 | (c & 0xFF00) | (c >> 16)
@@ -713,6 +743,11 @@ class LogViewerWindow:
 
     def auto_refresh(self):
         if self.viewer.winfo_exists():
+
+            if getattr(self, 'current_app_theme', None) != ctk.get_appearance_mode():
+                self.current_app_theme = ctk.get_appearance_mode()
+                self._update_window_theme_elements()
+
             if self.current_tab[0] == 'inventory':
                 typed_query = self.search_var.get().strip()
                 hidden_query = " ".join(getattr(self, 'active_filters', set()))

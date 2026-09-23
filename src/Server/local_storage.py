@@ -4,6 +4,7 @@ import csv
 import json
 import shutil
 import time
+import zipfile
 from datetime import datetime
 import threading
 
@@ -21,6 +22,118 @@ class CsvStorage:
         
         if self.sync_path:
             threading.Thread(target=self._network_sync_loop, daemon=True).start()
+
+        self.local_backup_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'backups')
+        os.makedirs(os.path.join(self.local_backup_dir, 'recent'), exist_ok=True)
+        os.makedirs(os.path.join(self.local_backup_dir, 'hourly'), exist_ok=True)
+        os.makedirs(os.path.join(self.local_backup_dir, 'daily'), exist_ok=True)
+
+        self.last_backup_mtime = 0
+        self.last_valid_row_count = 0
+        threading.Thread(target=self._local_backup_loop, daemon=True).start()
+
+    # --- BACKUP ---
+    def _local_backup_loop(self):
+        while True:
+            time.sleep(120) # Run exactly every 2 minutes
+            self._create_local_backup()
+
+    def _create_local_backup(self):
+        with self.lock:
+            try:
+                if not os.path.exists(self.inventory_file): return
+                
+                current_mtime = os.path.getmtime(self.inventory_file)
+                if current_mtime == self.last_backup_mtime: return 
+                
+                with open(self.inventory_file, 'r', encoding='utf-8-sig') as f:
+                    lines = f.readlines()
+                
+                if not lines or 'Date' not in lines[0]: return 
+                
+                current_row_count = len(lines)
+                if self.last_valid_row_count > 10 and current_row_count < (self.last_valid_row_count * 0.5):
+                    return 
+                    
+                self.last_valid_row_count = current_row_count
+                self.last_backup_mtime = current_mtime 
+                
+                now = datetime.now()
+                timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+                
+                # --- Compress the entire DB into a single ZIP file ---
+                recent_zip = os.path.join(self.local_backup_dir, 'recent', f"{timestamp}.zip")
+                
+                with zipfile.ZipFile(recent_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    # 1. Add Active Files
+                    zf.write(self.inventory_file, "inventory.csv")
+                    if os.path.exists(self.employees_file):
+                        zf.write(self.employees_file, "employees.json")
+                        
+                    # 2. Add All History Logs dynamically
+                    if os.path.exists(self.history_dir):
+                        for root, dirs, files in os.walk(self.history_dir):
+                            for file in files:
+                                if file.endswith('.csv'):
+                                    abs_path = os.path.join(root, file)
+                                    # Calculate relative path so it extracts properly later
+                                    rel_path = os.path.relpath(abs_path, os.path.dirname(self.history_dir))
+                                    zf.write(abs_path, rel_path)
+                # --------------------------------------------------------------
+
+                # PROMOTE TO HOURLY / DAILY
+                hourly_zip = os.path.join(self.local_backup_dir, 'hourly', f"{now.strftime('%Y-%m-%d_%H-00-00')}.zip")
+                if not os.path.exists(hourly_zip): shutil.copy(recent_zip, hourly_zip)
+                    
+                daily_zip = os.path.join(self.local_backup_dir, 'daily', f"{now.strftime('%Y-%m-%d_00-00-00')}.zip")
+                if not os.path.exists(daily_zip): shutil.copy(recent_zip, daily_zip)
+                    
+                # 5. AUTO-PRUNING (Keep HDD clean)
+                self._prune_backups('recent', 30) # Keep last 60 minutes
+                self._prune_backups('hourly', 24) # Keep last 24 hours
+                self._prune_backups('daily', 30)  # Keep last 30 days
+            except Exception: pass
+
+    def _prune_backups(self, tier, keep_count):
+        tier_path = os.path.join(self.local_backup_dir, tier)
+        # Look for .zip files now, not folders
+        files = sorted([os.path.join(tier_path, f) for f in os.listdir(tier_path) if f.endswith('.zip')])
+        while len(files) > keep_count:
+            try: os.remove(files.pop(0))
+            except Exception: pass
+            
+    def get_available_backups(self):
+        backups = {'recent': [], 'hourly': [], 'daily': []}
+        for tier in backups.keys():
+            tier_path = os.path.join(self.local_backup_dir, tier)
+            if os.path.exists(tier_path):
+                # Fetch .zip files
+                files = sorted([f for f in os.listdir(tier_path) if f.endswith('.zip')], reverse=True)
+                backups[tier] = [os.path.join(tier_path, f) for f in files]
+        return backups
+
+    def restore_backup(self, zip_path, progress_callback=None):
+        with self.lock:
+            try:
+                base_dir = os.path.dirname(self.inventory_file)
+                
+                # Decompress everything perfectly back to its original location
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    file_list = zf.namelist()
+                    total_files = len(file_list)
+                    
+                    for i, file_info in enumerate(file_list):
+                        zf.extract(file_info, base_dir)
+                        if progress_callback:
+                            # Send live progress data back to the UI!
+                            progress_callback(i + 1, total_files, file_info)
+                            # Tiny sleep to ensure the UI has time to draw the progress bar
+                            time.sleep(0.05) 
+                            
+                self.last_valid_row_count = 0 
+                self._trigger_immediate_sync()
+                return True
+            except Exception: return False
 
     # --- DATA SCRUBBING ENGINE ---
     def _normalize_date(self, date_str):
