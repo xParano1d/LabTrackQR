@@ -12,7 +12,6 @@ Scan the configuration codes in this exact order (reference `scanner settings to
 1. **Default** (Resets the scanner to factory baseline)
 2. **Serial Port / USB Virtual Serial Port** (Disables HID Keyboard mode and routes data to COM ports)
 3. **Manual Mode** (If applicable to your scanning workflow)
-4. **Speed: 1 second** (Hardware-level buffer delay to ensure rapid-fire scans are processed cleanly)
 
 *Note: Ensure the scanner is configured and work as Virtual COM USB Device, scanners often force HID keyboard emulation as default.*
 
@@ -39,8 +38,15 @@ To distribute LabTrackQR without requiring a local Python environment, you can c
 
 ### 1. Build the Executable
 Open your terminal in the root project folder (the folder containing `appicon.png` and the `src` directory) and run the following command:
+
+#### Client:
 ```bash
-pyinstaller --onefile --noconsole --icon=icon.ico --add-data "icon.ico;." --paths src src\main.py
+PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon=img\iconApp.ico --add-data "img/*;." --paths src src\Client\main.py --name=LabTrackQR
+```
+
+#### Server:
+```bash
+PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon=img\iconApp.ico --add-data "img/*;." --paths src src\Server\main.py --name=LabTrackQR-Server
 ```
 **Command Breakdown:**
 * `--onefile`: Compresses everything into a single `.exe` file.

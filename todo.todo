@@ -14,11 +14,15 @@
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 ✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
 ✘ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe @cancelled (9/18/2026, 10:35:29 AM)
-☐ storage map creator and viewer like visualization of storage and where things are etc. @critical 
+☐ storage map creator and viewer like visualization of storage and where things are etc. @critical @today 
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
 ✔ dark/white theme switch (make sure icons and top bar colors are correct) @today @done (9/21/2026, 11:50:09 PM)
-☐ animate blinking for error and action reqiured popups @low 
+✔ animate popups appearing and dissapearing on screen smoothly @low @done (9/24/2026, 11:32:35 AM)
+☐ animate blinking for error and action reqiured popups @low
+☐ animate shaking init sample window when wrong data has been entered @low 
+☐ animate windows slide in/out when opened/closed @low
+✔ prevent ctrl+c notification spam when keys are held down @high @done (9/24/2026, 11:33:18 AM)
 ✔ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) ??? @today @done (9/17/2026, 2:55:49 PM)
 ✔ close manage employee badges after successfull relogin @low @done (9/18/2026, 12:13:56 PM)
 ✔ too fast scan of location->smp takes smp:{id} string to location name @critical @today @done (9/21/2026, 2:32:33 PM)
@@ -32,7 +36,7 @@
 ✔ fix user bypassing 14 days old samples check by going offline after starting an app (recheck after online again) @high @done (9/22/2026, 12:31:26 PM)
 ✔ fix relog cancel button and logviewer hamburger menu button visibility @done (9/22/2026, 1:46:10 PM)
 ✔ fix form validation red background for entries that are wrong @low @done (9/23/2026, 2:32:27 PM)
-☐ bug in reloging top left corner popup instead of left bottom
+✔ bug in reloging top left corner popup instead of left bottom @done (9/24/2026, 9:53:59 AM)
 tkinter to cutom tkinter elements changes:
     ✘ manage employee badges, add new sample change from optionMenu to comboBox for search and move func dept to bottom (above initialize sample button) @cancelled (9/18/2026, 12:06:07 PM)
     ✔ removal mode cancel button change @done (9/18/2026, 1:47:51 PM)
@@ -57,7 +61,7 @@ tkinter to cutom tkinter elements changes:
 ✔ fix a bug with weird behaviour after first time registration @done (9/15/2026, 9:47:27 AM)
 ✔ fix a bug with open in external editor polish characters displayed wrong @done (9/15/2026, 9:03:31 AM)
 ✔ change naming a bit (Pending-Storage -> verification queue | action removed -> request closed) @done (9/15/2026, 9:30:26 AM)
-☐ fix autorefresh (sometimes i feel like it does't even exist with current logic)
+✔ fix autorefresh (sometimes i feel like it does't even exist with current logic) @done (9/24/2026, 10:07:46 AM)
 ☐ close app confirmation 
 ✔ log viewer bring newest instance to top clicking 3rd time in tray @done (9/15/2026, 10:20:57 AM)
 ✘ About Tab for licenses and used things in app??????? @low @cancelled (9/22/2026, 11:38:59 AM)

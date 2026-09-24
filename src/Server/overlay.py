@@ -7,9 +7,11 @@ import os
 import ctypes
 import tkinter as tk
 import winreg
+import winsound
 import threading
 from PIL import Image, ImageTk
 from tkinter import ttk, messagebox
+from ctkfontawesome import icon_to_ctkimage
 from logviewer import LogViewerWindow
 
 try:
@@ -173,7 +175,6 @@ class NotificationManager:
     def open_log_viewer(self):
         self.active_log_windows = [w for w in self.active_log_windows if w.viewer.winfo_exists()]
         if len(self.active_log_windows) >= 2:
-            import winsound
             winsound.MessageBeep(winsound.MB_ICONHAND)
             self.spawn_notification("Window Limit Reached:\nMaximum of 2 log windows allowed.")
 
@@ -187,6 +188,113 @@ class NotificationManager:
 
         viewer_instance = LogViewerWindow(self.root, self.storage, self.spawn_notification, is_server=True)
         self.active_log_windows.append(viewer_instance)
+
+    def open_recovery_center(self):
+        if hasattr(self, 'recovery_win') and self.recovery_win and self.recovery_win.winfo_exists():
+            self.recovery_win.lift()
+            self.recovery_win.focus_force()
+            return
+            
+        win = ctk.CTkToplevel(self.root)
+        self.recovery_win = win
+
+        win.withdraw()
+
+        win.title("System Recovery Center")
+        win.attributes("-topmost", True)
+        self.center_window(win, 540, 500)
+        
+        # --- APPLY PERFECT TITLE BAR / ICONS ---
+        self._apply_window_theme(win)
+        
+        # --- LOGVIEWER COLOR PALETTE ---
+        win_bg = win._apply_appearance_mode(ctk.ThemeManager.theme["CTk"]["fg_color"])
+        frame_bg = win._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
+        win.configure(fg_color=win_bg)
+        
+        ctk.CTkLabel(win, text="System Recovery Center", font=("Segoe UI", 20, "bold")).pack(pady=(20, 5))
+        ctk.CTkLabel(win, text="Select a timestamp to safely restore the live inventory.", text_color="#d9534f", font=("Segoe UI", 12)).pack(pady=(0,15))
+        
+        tier_var = ctk.StringVar(value="Recent (Last Hour)")
+    
+        tier_seg = ctk.CTkSegmentedButton(win, values=["Recent (Last Hour)", "Hourly (Last 24h)", "Daily (Last 30 Days)"], variable=tier_var)
+        
+        list_frame = ctk.CTkScrollableFrame(win, width=460, height=260, fg_color=win_bg, border_width=1, border_color=["#cccccc", "#333333"])
+        
+        tier_seg.pack(padx=20, pady=(0, 10), fill=tk.X)
+        list_frame.pack(pady=5, fill=tk.BOTH, expand=True, padx=20)
+        
+        def populate_list(choice):
+            for widget in list_frame.winfo_children(): widget.destroy()
+            backups = self.storage.get_available_backups()
+            
+            if choice == "Recent (Last Hour)": key = 'recent'
+            elif choice == "Hourly (Last 24h)": key = 'hourly'
+            else: key = 'daily'
+            
+            items = backups.get(key, [])
+            if not items:
+                ctk.CTkLabel(list_frame, text="No backups available in this tier yet.", font=("Segoe UI", 12, "italic")).pack(pady=40)
+                return
+                
+            for index, b_path in enumerate(items):
+                # Strip the .zip extension for the UI display
+                folder_name = os.path.basename(b_path).replace(".zip", "")
+                parts = folder_name.split("_")
+                display_name = f"{parts[0]}   {parts[1].replace('-', ':')}" if len(parts) == 2 else folder_name
+                
+                # THE FIX: Alternate the row colors exactly like a data table!
+                row_bg_color = frame_bg if index % 2 == 0 else win_bg
+                
+                row = ctk.CTkFrame(list_frame, fg_color=row_bg_color, corner_radius=0)
+                row.pack(fill=tk.X, pady=1)
+                ctk.CTkLabel(row, text=display_name, font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT, padx=15, pady=8)
+                ctk.CTkButton(row, text="Restore", width=80, fg_color="#d9534f", hover_color="#c9302c", command=lambda p=b_path, d=display_name: confirm_restore(p, d)).pack(side=tk.RIGHT, padx=15)
+                            
+        tier_seg.configure(command=populate_list)
+        
+        def confirm_restore(b_path, display_name):
+            msg = f"Are you ABSOLUTELY sure you want to restore the database to:\n\n{display_name}\n\nThis will completely overwrite the current live inventory and cannot be undone!"
+            if messagebox.askyesno("CRITICAL WARNING", msg, parent=win):
+                
+                # 1. Spwan the Progress Bar Window
+                prog_win = ctk.CTkToplevel(self.root)
+                prog_win.title("Restoring Backup...")
+                prog_win.attributes("-topmost", True)
+                self.center_window(prog_win, 420, 180)
+                self._apply_window_theme(prog_win)
+                
+                ctk.CTkLabel(prog_win, text="Decompressing Archive...", font=("Segoe UI", 16, "bold")).pack(pady=(20, 10))
+                
+                progress_bar = ctk.CTkProgressBar(prog_win, width=320, progress_color=["#217346", "#09ce66"])
+                progress_bar.pack(pady=5)
+                progress_bar.set(0)
+                
+                status_lbl = ctk.CTkLabel(prog_win, text="Initializing...", font=("Segoe UI", 12, "italic"))
+                status_lbl.pack()
+                
+                # 2. Callback function to receive live extraction data
+                def update_progress(current, total, filename):
+                    prog_win.after(0, lambda: progress_bar.set(current / total))
+                    prog_win.after(0, lambda: status_lbl.configure(text=f"Extracting: {filename}"))
+                
+                # 3. Run the heavy ZIP extraction in a background thread!
+                def perform_restore():
+                    success = self.storage.restore_backup(b_path, update_progress)
+                    prog_win.after(500, prog_win.destroy) # Wait half a second at 100%
+                    
+                    if success:
+                        prog_win.after(0, lambda: self.spawn_notification(f"Database Restored to:\n{display_name}"))
+                        prog_win.after(0, win.destroy)
+                    else:
+                        prog_win.after(0, lambda: messagebox.showerror("Error", "Failed to restore backup.", parent=win))
+                        
+                threading.Thread(target=perform_restore, daemon=True).start()
+
+        populate_list(tier_var.get())
+        ctk.CTkButton(win, text="Close", command=win.destroy, fg_color="#555555", hover_color="#777777").pack(pady=15)
+
+        win.after(250, lambda: [self._apply_window_theme(win), win.deiconify(), win.lift(), win.focus_force()])
 
     def open_user_manager(self):
         if hasattr(self, 'user_mgr_win') and self.user_mgr_win and self.user_mgr_win.winfo_exists():
@@ -381,16 +489,17 @@ class NotificationManager:
         window = tk.Toplevel(self.root)
         window.overrideredirect(True)
         
-        transparent_color = "#000001" 
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        transparent_color = "#0E8189" if is_dark else "#000001" 
+        
         window.configure(bg=transparent_color)
         window.wm_attributes("-transparentcolor", transparent_color)
-        window.attributes("-topmost", True)
         
         # --- PULL COLORS DIRECTLY FROM BW_THEME.JSON ---
-        bg_color = ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"]
+        bg_color = ctk.ThemeManager.theme["CTkFrame"]["fg_color"]
         text_primary = ctk.ThemeManager.theme["CTkLabel"]["text_color"]
         text_secondary = ctk.ThemeManager.theme["CTkButton"]["text_color_disabled"]
-        theme_accent = ctk.ThemeManager.theme["CTkButton"]["fg_color"]
+        theme_accent = ctk.ThemeManager.theme["CTkButton"]["hover_color"]
 
         # 1. Semantic Analysis for Colors and Icons
         text_lower = text.lower()
@@ -443,7 +552,7 @@ class NotificationManager:
         
         # 3. Lifespan Progress Bar
         prog_bar = ctk.CTkProgressBar(main_frame, height=4, fg_color=bg_color, progress_color=theme_color, corner_radius=0, border_width=0)
-        prog_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=(5, 7), pady=(0, 4))
+        prog_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=(1, 7), pady=(0, 4))
         prog_bar.set(1.0)
         
         # 4. Text Layout Frame
@@ -452,7 +561,6 @@ class NotificationManager:
 
         # 5. Dynamic Iconography
         try:
-            from ctkfontawesome import icon_to_ctkimage
             mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
             icon_img = icon_to_ctkimage(icon_name, fill=theme_color[mode_idx], scale_to_width=34)
             icon_lbl = ctk.CTkLabel(top_frame, text="", image=icon_img, width=40)
@@ -475,8 +583,6 @@ class NotificationManager:
             ctk.CTkLabel(inner_text, text=lines[1], text_color=text_primary, font=("Segoe UI", 16, "bold"), anchor="w", justify="left").pack(fill=tk.X)
         if len(lines) == 3:
             ctk.CTkLabel(inner_text, text=lines[2], text_color=text_secondary, font=("Segoe UI", 12, "italic"), anchor="w", justify="left").pack(fill=tk.X)
-
-        self.position_and_show(window)
         
         # 7. Smooth Drain Animation Loop
         duration_ms = 6500
@@ -494,148 +600,93 @@ class NotificationManager:
                 prog_bar.set(remaining)
                 window.after(step_ms, update_progress)
 
+        self.position_and_show(window)
+        
+        # 7. Smooth Drain Animation Loop
+        duration_ms = 6500
+        step_ms = 50
+        steps = duration_ms // step_ms
+        window.current_step = 0
+        window.is_closing = False # Track if it is currently exiting
+
+        def update_progress():
+            if not window.winfo_exists(): return
+            if window.is_closing: return # Stop draining if already sliding out
+            
+            window.current_step += 1
+            remaining = 1.0 - (window.current_step / steps)
+            if remaining <= 0:
+                # --- Trigger collapse instantly ---
+                window.is_closing = True
+                window.target_x = self.root.winfo_screenwidth() + 50
+                self.recalculate_positions() 
+            else:
+                prog_bar.set(remaining)
+                window.after(step_ms, update_progress)
         window.after(step_ms, update_progress)
 
 
     def position_and_show(self, window):
-            window.update_idletasks()
-            window_width = 360
-            window_height = 100
-            screen_width = self.root.winfo_screenwidth()
-            screen_height = self.root.winfo_screenheight()
+        window.update_idletasks()
+        window.width = 360
+        window.height = 100
+        screen_width = self.root.winfo_screenwidth()
+        
+        # --- We must define the final horizontal destination! ---
+        window.target_x = screen_width - window.width - 20
+        
+        # 1. Add it to the tracking list first
+        self.active_notifications.append(window)
+        
+        # 2. Force a recalculation to let the smart engine assign the perfect target_y
+        # This completely ignores any notifications currently sliding off-screen!
+        self.recalculate_positions()
+        
+        # 3. Start completely off-screen to the right, exactly at its newly calculated height
+        window.current_x = float(screen_width + 50)
+        window.current_y = float(getattr(window, 'target_y', self.root.winfo_screenheight() - 160)) 
+        
+        window.geometry(f"{window.width}x{window.height}+{int(window.current_x)}+{int(window.current_y)}")
+        
+        self.animate_notification(window)
+
+    def animate_notification(self, window):
+        """Runs at 120 FPS. Snappy Lerp (Linear Interpolation) for smooth easing."""
+        if not window.winfo_exists(): return
+        
+        # Move 15% of the remaining distance per frame at 120 FPS
+        window.current_x += (window.target_x - window.current_x) * 0.15
+        window.current_y += (window.target_y - window.current_y) * 0.15
+        
+        window.geometry(f"{window.width}x{window.height}+{int(window.current_x)}+{int(window.current_y)}")
+        
+        # If it is sliding out and basically off-screen, completely destroy it.
+        if getattr(window, 'is_closing', False) and abs(window.current_x - window.target_x) < 2:
+            self.destroy_notification(window)
+            return
             
-            x_pos = screen_width - window_width - 20
-            y_pos = (screen_height - window_height - 60) - (len(self.active_notifications) * (window_height + 10))
-            
-            window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
-            self.active_notifications.append(window)
-    
+        # --- 8ms delay = ~120 Frames Per Second ---
+        window.after(8, lambda: self.animate_notification(window))
+
     def destroy_notification(self, window):
         if window in self.active_notifications:
             self.active_notifications.remove(window)
             window.destroy()
-            self.recalculate_positions()
+            # We no longer recalculate here, because we do it the moment it starts closing!
 
     def recalculate_positions(self):
-        window_width = 360
-        window_height = 100
-        screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
+        base_y = screen_height - 100 - 60
         
-        x_pos = screen_width - window_width - 20
-        base_y = screen_height - window_height - 60
+        # --- Only calculate positions for windows that are staying! ---
+        active_and_staying = [w for w in self.active_notifications if w.winfo_exists() and not getattr(w, 'is_closing', False)]
         
-        for index, window in enumerate(self.active_notifications):
-            if window.winfo_exists():
-                y_pos = base_y - (index * (window_height + 10))
-                window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
-
-    def open_recovery_center(self):
-        if hasattr(self, 'recovery_win') and self.recovery_win and self.recovery_win.winfo_exists():
-            self.recovery_win.lift()
-            self.recovery_win.focus_force()
-            return
+        for index, window in enumerate(active_and_staying):
+            new_y = base_y - (index * 110) # 100 height + 10 padding
+            if new_y < 10: new_y = 10
             
-        win = ctk.CTkToplevel(self.root)
-        self.recovery_win = win
-
-        win.withdraw()
-
-        win.title("System Recovery Center")
-        win.attributes("-topmost", True)
-        self.center_window(win, 540, 500)
-        
-        # --- APPLY PERFECT TITLE BAR / ICONS ---
-        self._apply_window_theme(win)
-        
-        # --- LOGVIEWER COLOR PALETTE ---
-        win_bg = win._apply_appearance_mode(ctk.ThemeManager.theme["CTk"]["fg_color"])
-        frame_bg = win._apply_appearance_mode(ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"])
-        win.configure(fg_color=win_bg)
-        
-        ctk.CTkLabel(win, text="System Recovery Center", font=("Segoe UI", 20, "bold")).pack(pady=(20, 5))
-        ctk.CTkLabel(win, text="Select a timestamp to safely restore the live inventory.", text_color="#d9534f", font=("Segoe UI", 12)).pack(pady=(0,15))
-        
-        tier_var = ctk.StringVar(value="Recent (Last Hour)")
-    
-        tier_seg = ctk.CTkSegmentedButton(win, values=["Recent (Last Hour)", "Hourly (Last 24h)", "Daily (Last 30 Days)"], variable=tier_var)
-        
-        list_frame = ctk.CTkScrollableFrame(win, width=460, height=260, fg_color=win_bg, border_width=1, border_color=["#cccccc", "#333333"])
-        
-        tier_seg.pack(padx=20, pady=(0, 10), fill=tk.X)
-        list_frame.pack(pady=5, fill=tk.BOTH, expand=True, padx=20)
-        
-        def populate_list(choice):
-            for widget in list_frame.winfo_children(): widget.destroy()
-            backups = self.storage.get_available_backups()
-            
-            if choice == "Recent (Last Hour)": key = 'recent'
-            elif choice == "Hourly (Last 24h)": key = 'hourly'
-            else: key = 'daily'
-            
-            items = backups.get(key, [])
-            if not items:
-                ctk.CTkLabel(list_frame, text="No backups available in this tier yet.", font=("Segoe UI", 12, "italic")).pack(pady=40)
-                return
-                
-            for index, b_path in enumerate(items):
-                # Strip the .zip extension for the UI display
-                folder_name = os.path.basename(b_path).replace(".zip", "")
-                parts = folder_name.split("_")
-                display_name = f"{parts[0]}   {parts[1].replace('-', ':')}" if len(parts) == 2 else folder_name
-                
-                # THE FIX: Alternate the row colors exactly like a data table!
-                row_bg_color = frame_bg if index % 2 == 0 else win_bg
-                
-                row = ctk.CTkFrame(list_frame, fg_color=row_bg_color, corner_radius=0)
-                row.pack(fill=tk.X, pady=1)
-                ctk.CTkLabel(row, text=display_name, font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT, padx=15, pady=8)
-                ctk.CTkButton(row, text="Restore", width=80, fg_color="#d9534f", hover_color="#c9302c", command=lambda p=b_path, d=display_name: confirm_restore(p, d)).pack(side=tk.RIGHT, padx=15)
-                              
-        tier_seg.configure(command=populate_list)
-        
-        def confirm_restore(b_path, display_name):
-            msg = f"Are you ABSOLUTELY sure you want to restore the database to:\n\n{display_name}\n\nThis will completely overwrite the current live inventory and cannot be undone!"
-            if messagebox.askyesno("CRITICAL WARNING", msg, parent=win):
-                
-                # 1. Spwan the Progress Bar Window
-                prog_win = ctk.CTkToplevel(self.root)
-                prog_win.title("Restoring Backup...")
-                prog_win.attributes("-topmost", True)
-                self.center_window(prog_win, 420, 180)
-                self._apply_window_theme(prog_win)
-                
-                ctk.CTkLabel(prog_win, text="Decompressing Archive...", font=("Segoe UI", 16, "bold")).pack(pady=(20, 10))
-                
-                progress_bar = ctk.CTkProgressBar(prog_win, width=320, progress_color=["#217346", "#09ce66"])
-                progress_bar.pack(pady=5)
-                progress_bar.set(0)
-                
-                status_lbl = ctk.CTkLabel(prog_win, text="Initializing...", font=("Segoe UI", 12, "italic"))
-                status_lbl.pack()
-                
-                # 2. Callback function to receive live extraction data
-                def update_progress(current, total, filename):
-                    prog_win.after(0, lambda: progress_bar.set(current / total))
-                    prog_win.after(0, lambda: status_lbl.configure(text=f"Extracting: {filename}"))
-                
-                # 3. Run the heavy ZIP extraction in a background thread!
-                def perform_restore():
-                    success = self.storage.restore_backup(b_path, update_progress)
-                    prog_win.after(500, prog_win.destroy) # Wait half a second at 100%
-                    
-                    if success:
-                        prog_win.after(0, lambda: self.spawn_notification(f"Database Restored to:\n{display_name}"))
-                        prog_win.after(0, win.destroy)
-                    else:
-                        prog_win.after(0, lambda: messagebox.showerror("Error", "Failed to restore backup.", parent=win))
-                        
-                threading.Thread(target=perform_restore, daemon=True).start()
-
-        populate_list(tier_var.get())
-        ctk.CTkButton(win, text="Close", command=win.destroy, fg_color="#555555", hover_color="#777777").pack(pady=15)
-
-        win.after(250, lambda: [self._apply_window_theme(win), win.deiconify(), win.lift(), win.focus_force()])
+            # The animate loop will automatically catch this new target_y and slide it down
+            window.target_y = new_y
 
     def run(self):
         self.root.mainloop()

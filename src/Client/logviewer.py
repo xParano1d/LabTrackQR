@@ -12,6 +12,7 @@ import threading
 import requests
 import re
 import winreg
+import hashlib
 from PIL import Image
 from datetime import datetime
 
@@ -649,7 +650,11 @@ class LogViewerWindow:
                 unique_data.append(row)
         data = unique_data
 
-        current_hash = f"{len(data)}_{source_type}_{year}_{month}_{(str(data[-1]) if data else '')}_{self.current_sort_col}_{self.current_sort_reverse}_{search_query}"
+        # This converts the entire dataset into a secure MD5 hash string. 
+        # If even a single letter changes anywhere in the file, this hash will change, forcing a refresh!
+        content_hash = hashlib.md5(str(data).encode('utf-8', 'ignore')).hexdigest()
+        current_hash = f"{content_hash}_{source_type}_{year}_{month}_{self.current_sort_col}_{self.current_sort_reverse}_{search_query}"
+        
         if is_auto_refresh and current_hash == self.last_data_hash[0]: return 
         self.last_data_hash[0] = current_hash
 
@@ -748,18 +753,26 @@ class LogViewerWindow:
                 self.current_app_theme = ctk.get_appearance_mode()
                 self._update_window_theme_elements()
 
-            if self.current_tab[0] == 'inventory':
+            if self.current_tab[0] in ['inventory', 'history_specific']:
                 typed_query = self.search_var.get().strip()
                 hidden_query = " ".join(getattr(self, 'active_filters', set()))
                 full_query = f"{typed_query} {hidden_query}".strip()
-                self.load_data('inventory', full_query, is_auto_refresh=True)
-                    
-            self.viewer.after(2000, self.auto_refresh)
+                
+                # Pass the year and month so the engine knows which file to check!
+                self.load_data(self.current_tab[0], full_query, is_auto_refresh=True, year=self.current_history_target[0], month=self.current_history_target[1])
+
+            self.viewer.after(1000, self.auto_refresh)
 
     def copy_selection(self, event=None):
         selected = self.tree.selection()
         if not selected: 
             return "break"
+            
+        current_time = time.time()
+        if getattr(self, 'last_copy_time', 0) > 0 and (current_time - self.last_copy_time) < 0.3:
+            return "break" # Ignore if it's been less 0.3s
+        self.last_copy_time = current_time
+        
         copied_lines = []
         for item in selected:
             values = self.tree.item(item, "values")
@@ -768,7 +781,7 @@ class LogViewerWindow:
         self.viewer.clipboard_clear()
         self.viewer.clipboard_append("\n".join(copied_lines))
         self.notify(f"Copied {len(selected)} rows to clipboard" if len(selected) > 1 else "Copied 1 row to clipboard")
-        return "break" 
+        return "break"
 
     def open_external_file(self):
         file_to_open = self.storage.get_active_file_path(

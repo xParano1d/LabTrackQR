@@ -732,16 +732,17 @@ class NotificationManager:
         window = tk.Toplevel(self.root)
         window.overrideredirect(True)
         
-        transparent_color = "#000001" 
+        is_dark = ctk.get_appearance_mode() == "Dark"
+        transparent_color = "#0E8189" if is_dark else "#000001" 
+        
         window.configure(bg=transparent_color)
         window.wm_attributes("-transparentcolor", transparent_color)
-        window.attributes("-topmost", True)
         
         # --- PULL COLORS DIRECTLY FROM BW_THEME.JSON ---
-        bg_color = ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"]
+        bg_color = ctk.ThemeManager.theme["CTkFrame"]["fg_color"]
         text_primary = ctk.ThemeManager.theme["CTkLabel"]["text_color"]
         text_secondary = ctk.ThemeManager.theme["CTkButton"]["text_color_disabled"]
-        theme_accent = ctk.ThemeManager.theme["CTkButton"]["fg_color"]
+        theme_accent = ctk.ThemeManager.theme["CTkButton"]["hover_color"]
 
         # 1. Semantic Analysis for Colors and Icons
         text_lower = text.lower()
@@ -794,7 +795,7 @@ class NotificationManager:
         
         # 3. Lifespan Progress Bar
         prog_bar = ctk.CTkProgressBar(main_frame, height=4, fg_color=bg_color, progress_color=theme_color, corner_radius=0, border_width=0)
-        prog_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=(5, 7), pady=(0, 4))
+        prog_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=(1, 7), pady=(0, 4))
         prog_bar.set(1.0)
         
         # 4. Text Layout Frame
@@ -825,8 +826,6 @@ class NotificationManager:
             ctk.CTkLabel(inner_text, text=lines[1], text_color=text_primary, font=("Segoe UI", 16, "bold"), anchor="w", justify="left").pack(fill=tk.X)
         if len(lines) == 3:
             ctk.CTkLabel(inner_text, text=lines[2], text_color=text_secondary, font=("Segoe UI", 12, "italic"), anchor="w", justify="left").pack(fill=tk.X)
-
-        self.position_and_show(window)
         
         # 7. Smooth Drain Animation Loop
         duration_ms = 6500
@@ -844,40 +843,92 @@ class NotificationManager:
                 prog_bar.set(remaining)
                 window.after(step_ms, update_progress)
 
+        self.position_and_show(window)
+        
+        # 7. Smooth Drain Animation Loop
+        duration_ms = 6500
+        step_ms = 50
+        steps = duration_ms // step_ms
+        window.current_step = 0
+        window.is_closing = False # Track if it is currently exiting
+
+        def update_progress():
+            if not window.winfo_exists(): return
+            if window.is_closing: return # Stop draining if already sliding out
+            
+            window.current_step += 1
+            remaining = 1.0 - (window.current_step / steps)
+            if remaining <= 0:
+                # --- Trigger collapse instantly ---
+                window.is_closing = True
+                window.target_x = self.root.winfo_screenwidth() + 50
+                self.recalculate_positions() 
+            else:
+                prog_bar.set(remaining)
+                window.after(step_ms, update_progress)
         window.after(step_ms, update_progress)
 
     def position_and_show(self, window):
         window.update_idletasks()
-        window_width = 360
-        window_height = 100
+        window.width = 360
+        window.height = 100
         screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
         
-        x_pos = screen_width - window_width - 20
-        y_pos = (screen_height - window_height - 60) - (len(self.active_notifications) * (window_height + 10))
+        # --- We must define the final horizontal destination! ---
+        window.target_x = screen_width - window.width - 20
         
-        window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
+        # 1. Add it to the tracking list first
         self.active_notifications.append(window)
+        
+        # 2. Force a recalculation to let the smart engine assign the perfect target_y
+        # This completely ignores any notifications currently sliding off-screen!
+        self.recalculate_positions()
+        
+        # 3. Start completely off-screen to the right, exactly at its newly calculated height
+        window.current_x = float(screen_width + 50)
+        window.current_y = float(getattr(window, 'target_y', self.root.winfo_screenheight() - 160)) 
+        
+        window.geometry(f"{window.width}x{window.height}+{int(window.current_x)}+{int(window.current_y)}")
+        
+        self.animate_notification(window)
+
+    def animate_notification(self, window):
+        """Runs at 120 FPS. Snappy Lerp (Linear Interpolation) for smooth easing."""
+        if not window.winfo_exists(): return
+        
+        # Move 15% of the remaining distance per frame at 120 FPS
+        window.current_x += (window.target_x - window.current_x) * 0.15
+        window.current_y += (window.target_y - window.current_y) * 0.15
+        
+        window.geometry(f"{window.width}x{window.height}+{int(window.current_x)}+{int(window.current_y)}")
+        
+        # If it is sliding out and basically off-screen, completely destroy it.
+        if getattr(window, 'is_closing', False) and abs(window.current_x - window.target_x) < 2:
+            self.destroy_notification(window)
+            return
+            
+        # --- 8ms delay = ~120 Frames Per Second ---
+        window.after(8, lambda: self.animate_notification(window))
 
     def destroy_notification(self, window):
         if window in self.active_notifications:
             self.active_notifications.remove(window)
             window.destroy()
-            self.recalculate_positions()
+            # We no longer recalculate here, because we do it the moment it starts closing!
 
     def recalculate_positions(self):
-        window_width = 360
-        window_height = 100
-        screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
+        base_y = screen_height - 100 - 60
         
-        x_pos = screen_width - window_width - 20
-        base_y = screen_height - window_height - 60
+        # --- Only calculate positions for windows that are staying! ---
+        active_and_staying = [w for w in self.active_notifications if w.winfo_exists() and not getattr(w, 'is_closing', False)]
         
-        for index, window in enumerate(self.active_notifications):
-            if window.winfo_exists():
-                y_pos = base_y - (index * (window_height + 10))
-                window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
+        for index, window in enumerate(active_and_staying):
+            new_y = base_y - (index * 110) # 100 height + 10 padding
+            if new_y < 10: new_y = 10
+            
+            # The animate loop will automatically catch this new target_y and slide it down
+            window.target_y = new_y
 
     def run(self):
         self.root.mainloop()
