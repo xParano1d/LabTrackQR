@@ -110,6 +110,7 @@ def setup_tray(root, scanner_mgr):
         scanner_mgr.removal_mode = True
         message_queue.put("COMMAND:WAITING_FOR_REMOVAL_SCAN")
     def trigger_log_viewer(icon, item): message_queue.put("COMMAND:OPEN_LOG_VIEWER")
+    def trigger_map_viewer(icon, item): message_queue.put("COMMAND:OPEN_MAP_VIEWER")
     def trigger_user_manager(icon, item): message_queue.put("COMMAND:OPEN_USER_MANAGER")
     
     def toggle_theme(icon, item):
@@ -136,6 +137,7 @@ def setup_tray(root, scanner_mgr):
         pystray.MenuItem("Remove Sample", trigger_removal_mode), 
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("View Logs and History", trigger_log_viewer), 
+        pystray.MenuItem("Laboratory Map", trigger_map_viewer),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Manage Employee Badges", trigger_user_manager),
         pystray.Menu.SEPARATOR,

@@ -15,6 +15,7 @@ import tkinter as tk
 from datetime import datetime
 from PIL import Image, ImageTk
 from logviewer import LogViewerWindow
+from mapviewer import MapViewerWindow
 from ctkfontawesome import icon_to_ctkimage
 
 try:
@@ -192,6 +193,7 @@ class NotificationManager:
             
             if msg == "COMMAND:OPEN_FORM": self.open_new_sample_form(); continue
             if msg == "COMMAND:OPEN_LOG_VIEWER": self.open_log_viewer(); continue
+            if msg == "COMMAND:OPEN_MAP_VIEWER": self.open_map_viewer(); continue
             if msg == "COMMAND:WAITING_FOR_REMOVAL_SCAN": self.open_waiting_for_removal(); continue
             if msg == "COMMAND:OPEN_USER_MANAGER": self.open_employee_directory(); continue
             if msg == "COMMAND:SHOW_LOCK_SCREEN": self.open_lock_screen(); continue
@@ -226,6 +228,13 @@ class NotificationManager:
                     self.spawn_notification(clean_msg)
 
         self.root.after(50, self.check_queue)
+
+    def open_map_viewer(self):
+        if hasattr(self, 'map_viewer_win') and self.map_viewer_win and self.map_viewer_win.viewer.winfo_exists():
+            self.map_viewer_win.viewer.lift()
+            self.map_viewer_win.viewer.focus_force()
+            return
+        self.map_viewer_win = MapViewerWindow(self.root, self.storage, self.spawn_notification)
 
     def open_log_viewer(self, initial_filters=None):
         self.active_log_windows = [w for w in self.active_log_windows if w.viewer.winfo_exists()]
@@ -767,9 +776,9 @@ class NotificationManager:
         elif "online" in text_lower:
             theme_color = ['#06B6D4', '#06B6D4']
             icon_name = "network-wired"
-        elif "offline" in text_lower:
+        elif "offline" in text_lower or "unplugged" in text_lower:
             theme_color = ["#d9534f", "#d9534f"]
-            icon_name = "chain-slash"
+            icon_name = "plug-circle-xmark"
         elif "removal mode cancelled" in text_lower:
             theme_color = ["#f39c12", "#f39c12"] 
         elif any(w in text_lower for w in ["remove", "removed", "removal"]):

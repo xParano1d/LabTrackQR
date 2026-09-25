@@ -8,14 +8,19 @@ no conversion
 
 
 Komendy konfiguracyjne dla czytnika Zenwire W213
+1. KODY SYSTEMOWE I RATUNKOWE
+Wejście w tryb konfiguracji (Włącz kod zestawu): S_CMD_0001
+    (Zeskanuj ten kod przed zmianą ustawień, jeśli czytnik ignoruje inne komendy)
+Przywracanie ustawień fabrycznych (Twardy reset): S_CMD_FFFF
+    (Użyj, jeśli czytnik przestanie wpisywać znaki lub całkowicie się zawiesi)
 
-1. TRYBY PRACY CZYTNIKA:
-
-Tryb ręczny (Manual mode): S_CMD_MT00
-Tryb ciągły (Continuous mode): S_CMD_020E
-Tryb automatycznego wzbudzania (Sensing mode): S_CMD_020F
-
-2. TRYBY KOMUNIKACJI:
-
-Standardowa klawiatura (USB HID keyboard - domyślny): S_CMD_01H0
+2. TRYBY KOMUNIKACJI (PORTY)
+Standardowa klawiatura USB (USB HID keyboard - tryb domyślny): S_CMD_01H0
 Wirtualny port COM (USB Virtual serial port): S_CMD_01H3
+
+3. TRYBY PRACY (SKANOWANIA)
+Tryb ręczny na przycisk (Manual mode): S_CMD_MT00
+Tryb ciągły (Continuous mode): S_CMD_020E
+    (Laser świeci cały czas, nie trzeba wciskać przycisku)
+Tryb automatycznego wzbudzania (Sensing mode): S_CMD_020F
+    (Czytnik uaktywnia się sam po wykryciu ruchu pod obiektywem)

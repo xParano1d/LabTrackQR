@@ -9,10 +9,12 @@ import tkinter as tk
 import winreg
 import winsound
 import threading
+import subprocess
 from PIL import Image, ImageTk
 from tkinter import ttk, messagebox
 from ctkfontawesome import icon_to_ctkimage
 from logviewer import LogViewerWindow
+from mapviewer import MapViewerWindow
 
 try:
     myappid = 'labtrack.qr.desktop.app.server.1' 
@@ -143,16 +145,10 @@ class NotificationManager:
     def check_queue(self):
         if getattr(self, 'current_app_theme', None) != ctk.get_appearance_mode():
             self.current_app_theme = ctk.get_appearance_mode()
-            
-            # Repaint User Manager if open
             if hasattr(self, 'user_mgr_win') and self.user_mgr_win and self.user_mgr_win.winfo_exists():
                 self._apply_window_theme(self.user_mgr_win)
-                
-            # Repaint Recovery Center if open
             if hasattr(self, 'recovery_win') and self.recovery_win and self.recovery_win.winfo_exists():
                 self._apply_window_theme(self.recovery_win)
-                
-            # Repaint Employee Directory if open (Client)
             if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
                 self._apply_window_theme(self.emp_dir_win)
 
@@ -160,6 +156,8 @@ class NotificationManager:
             msg = self.message_queue.get()
             
             if msg == "COMMAND:OPEN_LOG_VIEWER": self.open_log_viewer(); continue
+            if msg == "COMMAND:OPEN_MAP_VIEWER": self.open_map_viewer(); continue
+            if msg == "COMMAND:OPEN_MAP_CREATOR": self.open_map_creator(); continue
             if msg == "COMMAND:OPEN_USER_MANAGER": self.open_user_manager(); continue
             if msg == "COMMAND:OPEN_RECOVERY_CENTER": self.open_recovery_center(); continue
 
@@ -171,6 +169,19 @@ class NotificationManager:
                     self.spawn_notification(clean_msg)
 
         self.root.after(50, self.check_queue)
+
+    def open_map_viewer(self):
+        if hasattr(self, 'map_viewer_win') and self.map_viewer_win and self.map_viewer_win.viewer.winfo_exists():
+            self.map_viewer_win.viewer.lift()
+            self.map_viewer_win.viewer.focus_force()
+            return
+        self.map_viewer_win = MapViewerWindow(self.root, self.storage, self.spawn_notification)
+
+    def open_map_creator(self):
+        try:
+            subprocess.Popen([sys.executable, "--creator"])
+        except Exception as e:
+            self.spawn_notification(f"Error launching Creator:\n{e}")
 
     def open_log_viewer(self):
         self.active_log_windows = [w for w in self.active_log_windows if w.viewer.winfo_exists()]
@@ -524,9 +535,9 @@ class NotificationManager:
         elif "online" in text_lower:
             theme_color = ['#06B6D4', '#06B6D4']
             icon_name = "network-wired"
-        elif "offline" in text_lower:
+        elif "offline" in text_lower or "unplugged" in text_lower:
             theme_color = ["#d9534f", "#d9534f"]
-            icon_name = "chain-slash"
+            icon_name = "plug-circle-xmark"
         elif "removal mode cancelled" in text_lower:
             theme_color = ["#f39c12", "#f39c12"] 
         elif any(w in text_lower for w in ["remove", "removed", "removal"]):

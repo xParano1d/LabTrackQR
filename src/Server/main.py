@@ -93,7 +93,8 @@ def setup_tray(root, api_server):
         image = Image.new('RGB', (64, 64), color = (73, 109, 137))
 
     def trigger_log_viewer(icon, item): message_queue.put("COMMAND:OPEN_LOG_VIEWER")
-    def trigger_user_manager(icon, item): message_queue.put("COMMAND:OPEN_USER_MANAGER")
+    def trigger_map_viewer(icon, item): message_queue.put("COMMAND:OPEN_MAP_VIEWER")
+    def trigger_map_creator(icon, item): message_queue.put("COMMAND:OPEN_MAP_CREATOR")
     def trigger_user_manager(icon, item): message_queue.put("COMMAND:OPEN_USER_MANAGER")
     def trigger_recovery_center(icon, item): message_queue.put("COMMAND:OPEN_RECOVERY_CENTER")
 
@@ -118,7 +119,9 @@ def setup_tray(root, api_server):
             
     menu = pystray.Menu(
         pystray.MenuItem("View Logs and History", trigger_log_viewer), 
+        pystray.MenuItem("Laboratory Map", trigger_map_viewer),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Lab Map Config Creator", trigger_map_creator),
         pystray.MenuItem("Employees Management", trigger_user_manager),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Backup and Recovery", trigger_recovery_center),
@@ -228,6 +231,13 @@ def get_master_directory():
     return get_master_directory()
 
 if __name__ == "__main__":
+    # --- NATIVE CREATOR LAUNCHER ---
+    if len(sys.argv) > 1 and sys.argv[1] == "--creator":
+        from mapcreator import MapConfigurator
+        app = MapConfigurator()
+        app.mainloop()
+        sys.exit(0)
+
     # --- LOAD SAVED THEME BEFORE UI SPAWNS ---
     saved_theme = load_theme_preference()
     if saved_theme in ["Dark", "Light"]:
@@ -254,6 +264,8 @@ if __name__ == "__main__":
     save_path = os.path.join(parent_folder, "inventory.csv")
     employees_path = os.path.join(parent_folder, "employees.json")
     history_dir = os.path.join(parent_folder, "history_logs")
+    map_dir = os.path.join(parent_folder, "laboratory_map")
+    os.makedirs(map_dir, exist_ok=True)
     
     storage = CsvStorage(save_path, employees_path, history_dir, NETWORK_SYNC_PATH, SYNC_INTERVAL_SECONDS)
     
