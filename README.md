@@ -41,13 +41,19 @@ Open your terminal in the root project folder (the folder containing `appicon.pn
 
 #### Client:
 ```bash
-PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon=img\iconApp.ico --add-data "img/*;." --paths src src\Client\main.py --name=LabTrackQR
+PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon="img\iconApp.ico" --add-data "img/*;." --paths src src\Client\main.py --name=LabTrackQR
 ```
 
 #### Server:
 ```bash
-PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon=img\iconApp.ico --add-data "img/*;." --paths src src\Server\main.py --name=LabTrackQR-Server
+PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon="img\iconApp.ico" --add-data "img/*;." --paths src src\Server\main.py --name=LabTrackQR-Server
 ```
+
+### Map Creator:
+```bash
+PyInstaller --noconsole --onefile --windowed --icon="img\iconApp.ico" --collect-all customtkinter --collect-all ctkfontawesome --add-data "img\BW_theme.json;." "src\server\mapCreator.py" --name="MapCreator" 
+```
+
 **Command Breakdown:**
 * `--onefile`: Compresses everything into a single `.exe` file.
 * `--noconsole`: Hides the black background terminal window when the app is running.

@@ -14,7 +14,9 @@
 ✔ create a popup after app starts @high @done (6/14/2026, 6:34:22 PM)
 ✔ white/black icon depending on OS theme @high @done (9/3/2026, 8:46:51 AM)
 ✘ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe @cancelled (9/18/2026, 10:35:29 AM)
-☐ storage map creator and viewer like visualization of storage and where things are etc. @critical @today 
+✔ storage map config creator for server and as standalone .exe @done (9/25/2026, 1:27:21 PM)
+✔ storage map viewer like visualization of storage and where things are etc. @critical @today @done (9/25/2026, 4:12:24 PM)
+☐ re-design tray option menu for better visibility and decluttering @high
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
 ✔ dark/white theme switch (make sure icons and top bar colors are correct) @today @done (9/21/2026, 11:50:09 PM)
