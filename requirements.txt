@@ -22,3 +22,4 @@ requests>=2.34.2
 
 # Modern UI Engine
 customtkinter>=5.2.2
+ctkfontawesome>=0.8.0

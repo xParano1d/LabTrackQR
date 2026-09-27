@@ -16,6 +16,8 @@
 ✘ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe @cancelled (9/18/2026, 10:35:29 AM)
 ✔ storage map config creator for server and as standalone .exe @done (9/25/2026, 1:27:21 PM)
 ✔ storage map viewer like visualization of storage and where things are etc. @critical @today @done (9/25/2026, 4:12:24 PM)
+✔ storage map config and image cache on clients @done (9/27/2026, 9:05:48 PM)
+☐ storage map heatmap filter udpate
 ☐ re-design tray option menu for better visibility and decluttering @high
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
@@ -87,10 +89,3 @@ CLIENT:
     ✔ change init form to normal form with digits/letters etc. (-_()) @critical windows ad setup change 8 digits only @today @done (9/23/2026, 2:30:05 PM)
 ☐ config variables expansion @low 
 ☐ prepare instruction for scanner configuration, user manual and documentation @critical
-
-        
-Excel data integration:
-    ✔ restruct whole inventory and history logs with new columns headers and storage @today @done (9/15/2026, 1:53:35 PM)
-    ✘ "materials laboratory request" fetch only and create samples automatically @cancelled (9/22/2026, 2:54:26 PM)
-    ✘ add duplicates prevention when adding automatically @cancelled (9/22/2026, 2:54:30 PM)
-    ✘ qr printer automation if possible @cancelled (9/18/2026, 10:05:45 AM)

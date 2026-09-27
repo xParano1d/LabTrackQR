@@ -1,17 +1,22 @@
 import customtkinter as ctk
 from customtkinter import filedialog
 import tkinter as tk
+from tkinter import colorchooser
+from tkinter import ttk
 import os
+import sys
 import json
+import shutil
+import ctypes
+import winreg
 import math
 import time
 import copy 
-from PIL import Image, ImageTk
+import textwrap
+from PIL import Image, ImageTk, ImageFont, ImageDraw
 from ctkfontawesome import icon_to_ctkimage
-import winreg
 
 def get_app_theme():
-    """Reads the LabTrackQR theme from the registry. Falls back to OS theme if standalone."""
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\LabTrackQR") as key:
             theme, _ = winreg.QueryValueEx(key, "Theme")
@@ -30,7 +35,7 @@ class MapConfigurator(ctk.CTk):
             ctk.set_default_color_theme(theme_path)
         ctk.set_appearance_mode(get_app_theme())
         
-        self.title("LabTrackQR - Map Config Creator")
+        self.title("Laboratory Map Config Creator for LabTrackQR")
         self.geometry("1500x900")
         self.minsize(1000, 500)
         
@@ -38,7 +43,6 @@ class MapConfigurator(ctk.CTk):
         if os.path.exists(icon_path):
             self.iconbitmap(icon_path)
         
-        # --- STATE VARIABLES ---
         self.image_path = None
         self.original_image = None
         self.display_image = None
@@ -66,6 +70,7 @@ class MapConfigurator(ctk.CTk):
 
         self.editing_zone_index = None
         self.dragged_vertex_index = None
+        self.active_label_index = None 
         self.backup_vertices = []
         
         self.draw_mode = "Polygon" 
@@ -82,6 +87,8 @@ class MapConfigurator(ctk.CTk):
         self.last_selected_index = None
         self.checkbox_vars = {}
         
+        self.text_image_cache = {}
+        
         self._build_ui()
         self._bind_events()
 
@@ -96,89 +103,102 @@ class MapConfigurator(ctk.CTk):
         self.canvas = tk.Canvas(self.canvas_frame, bg="#1e1e1e", highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        self.sidebar = ctk.CTkFrame(self, width=400, corner_radius=0, fg_color=["#f5f8fa", "#0B2238"])
+        self.sidebar = ctk.CTkFrame(self, width=420, corner_radius=0, fg_color=["#f5f8fa", "#0B2238"])
         self.sidebar.grid(row=0, column=1, sticky="nsew")
         self.sidebar.grid_propagate(False)
-        
-        ctrl_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        ctrl_frame.pack(fill=tk.X, padx=15, pady=15)
         
         try:
             icon_load = icon_to_ctkimage("folder-open", fill="#FFFFFF", scale_to_width=20)
             icon_save = icon_to_ctkimage("save", fill="#FFFFFF", scale_to_width=20)
             icon_json = icon_to_ctkimage("arrow-right-to-file", fill="#FFFFFF", scale_to_width=16)
-            
             icon_edit = icon_to_ctkimage("edit", fill="#FFFFFF", scale_to_width=16)
             icon_ren = icon_to_ctkimage("font", fill="#FFFFFF", scale_to_width=16)
+            icon_col = icon_to_ctkimage("palette", fill="#FFFFFF", scale_to_width=16)
             icon_cpy = icon_to_ctkimage("copy", fill="#FFFFFF", scale_to_width=16)
             icon_del = icon_to_ctkimage("trash", fill="#FFFFFF", scale_to_width=16)
             icon_up = icon_to_ctkimage("square-caret-up", fill="#FFFFFF", scale_to_width=16)
             icon_dn = icon_to_ctkimage("square-caret-down", fill="#FFFFFF", scale_to_width=16)
             icon_poly = icon_to_ctkimage("draw-polygon", fill="#FFFFFF", scale_to_width=16)
             icon_rect = icon_to_ctkimage("square", fill="#FFFFFF", scale_to_width=16)
+        except Exception:
+            icon_load = icon_save = icon_json = icon_edit = icon_ren = icon_col = icon_cpy = icon_del = icon_up = icon_dn = icon_poly = icon_rect = None
 
-            print(f"Icons Loaded!")
-        except Exception as e:
-            print(f"Icon Load Failed (Fallback to text only): {e}")
-            icon_load = icon_save = icon_json = icon_edit = icon_ren = icon_cpy = icon_del = icon_up = icon_dn = None
-
-        self.btn_load = ctk.CTkButton(ctrl_frame, text="Load Map PNG", image=icon_load, command=self.load_map, height=36)
+        # --- SECTION 1: MAP FILES ---
+        file_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        file_frame.pack(fill=tk.X, padx=15, pady=(15, 0))
+        
+        self.btn_load = ctk.CTkButton(file_frame, text="Load Map PNG", image=icon_load, command=self.load_map, height=36)
         self.btn_load.pack(fill=tk.X, pady=(0, 5))
         
-        self.btn_load_cfg = ctk.CTkButton(ctrl_frame, text="Import Config (.json)", image=icon_json, command=self.load_config, height=36, fg_color=["#4A5A6A", "#1F3B55"])
+        self.btn_load_cfg = ctk.CTkButton(file_frame, text="Import Config (.json)", image=icon_json, command=self.load_config, height=36, fg_color=["#4A5A6A", "#1F3B55"])
         self.btn_load_cfg.pack(fill=tk.X, pady=(0, 15))
         
-        self.btn_save = ctk.CTkButton(ctrl_frame, text="Save Config", image=icon_save, command=self.save_config, height=36, fg_color=["#1e3b2e", "#217346"], hover_color=["#2a8f57", "#2a8f57"])
+        self.btn_save = ctk.CTkButton(file_frame, text="Save Config", image=icon_save, command=self.save_config, height=36, fg_color=["#1e3b2e", "#217346"], hover_color=["#2a8f57", "#2a8f57"])
         self.btn_save.pack(fill=tk.X)
         
-        # Custom Toggle Bar to support Icons
-        self.mode_frame = ctk.CTkFrame(ctrl_frame, fg_color="transparent")
-        self.mode_frame.pack(fill=tk.X, pady=(15, 0))
-        self.mode_frame.grid_columnconfigure((0, 1), weight=1)
+        # SEPARATOR 1
+        ctk.CTkFrame(self.sidebar, height=2, fg_color=["#d0d0d0", "#33424F"]).pack(fill=tk.X, padx=15, pady=15)
 
-        ctk.CTkFrame(self.sidebar, height=2, fg_color=["#d0d0d0", "#33424F"]).pack(fill=tk.X, padx=15, pady=10)
+        # --- SECTION 2: TOOLS ---
+        self.mode_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.mode_frame.pack(fill=tk.X, padx=15)
+        self.mode_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.btn_poly = ctk.CTkButton(self.mode_frame, text=" Polygon", image=icon_poly, fg_color="#2980b9", corner_radius=6, command=lambda: self.change_draw_mode("Polygon"))
         self.btn_poly.grid(row=0, column=0, sticky="nsew", padx=(0, 2))
 
         self.btn_rect = ctk.CTkButton(self.mode_frame, text=" Rectangle", image=icon_rect, fg_color="#33424F", corner_radius=6, command=lambda: self.change_draw_mode("Rectangle"))
-        self.btn_rect.grid(row=0, column=1, sticky="nsew", padx=(2, 0))
+        self.btn_rect.grid(row=0, column=1, sticky="nsew", padx=(2, 2))
+
+        self.btn_label = ctk.CTkButton(self.mode_frame, text=" Text Label", image=icon_ren, fg_color="#33424F", corner_radius=6, command=lambda: self.change_draw_mode("Label"))
+        self.btn_label.grid(row=0, column=2, sticky="nsew", padx=(2, 0))
         
-        ctk.CTkFrame(self.sidebar, height=2, fg_color=["#d0d0d0", "#33424F"]).pack(fill=tk.X, padx=15, pady=10)
+        # SEPARATOR 2
+        ctk.CTkFrame(self.sidebar, height=2, fg_color=["#d0d0d0", "#33424F"]).pack(fill=tk.X, padx=15, pady=15)
         
+        # --- SECTION 3: ZONES & ACTIONS ---
         action_container = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         action_container.pack(fill=tk.X, padx=15)
         ctk.CTkLabel(action_container, text="Zones & Actions", font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT)
         
-        self.action_bar = ctk.CTkFrame(self.sidebar, fg_color="transparent", height=40)
-        self.action_bar.pack(fill=tk.X, padx=15, pady=5)
+        self.action_bar = ctk.CTkFrame(self.sidebar, fg_color="transparent", height=32)
+        self.action_bar.pack(fill=tk.X, padx=15, pady=(5, 10))
         self.action_bar.grid_propagate(False) 
         
-        self.btn_act_edit = ctk.CTkButton(self.action_bar, text="Edit", image=icon_edit, width=70, fg_color="#2980b9", command=self.action_edit)
-        self.btn_act_edit.pack(side=tk.LEFT, padx=2)
-        
-        self.btn_act_ren = ctk.CTkButton(self.action_bar, text="Rename", image=icon_ren, width=75, fg_color="#33424F", command=self.action_rename)
-        self.btn_act_ren.pack(side=tk.LEFT, padx=2)
-        
-        self.btn_act_cpy = ctk.CTkButton(self.action_bar, text="Copy", image=icon_cpy, width=70, fg_color="#33424F", command=self.action_copy)
-        self.btn_act_cpy.pack(side=tk.LEFT, padx=2)
-        
-        self.btn_act_del = ctk.CTkButton(self.action_bar, text="Del", image=icon_del, width=65, fg_color="#c9302c", hover_color="#a82824", command=self.delete_selected_zones)
-        self.btn_act_del.pack(side=tk.LEFT, padx=2)
+        # Lock every single column to an exact pixel width so state-changes cannot physically shift the layout
+        self.action_bar.grid_columnconfigure(0, minsize=62)
+        self.action_bar.grid_columnconfigure(1, minsize=86)
+        self.action_bar.grid_columnconfigure(2, minsize=72)
+        self.action_bar.grid_columnconfigure(3, minsize=69)
+        self.action_bar.grid_columnconfigure(4, minsize=32)
+        self.action_bar.grid_columnconfigure(5, minsize=32)
+        self.action_bar.grid_columnconfigure(6, minsize=32)
 
-        layer_bar = ctk.CTkFrame(self.sidebar, fg_color="transparent", height=36)
-        layer_bar.pack(fill=tk.X, padx=15, pady=(0, 5))
-        layer_bar.grid_propagate(False)
+        self.btn_act_edit = ctk.CTkButton(self.action_bar, text=" Edit ", image=icon_edit, width=58, height=28, fg_color="#2980b9", command=self.action_edit)
+        self.btn_act_edit.grid(row=0, column=0, padx=(0, 4))
         
-        self.btn_act_up = ctk.CTkButton(layer_bar, text="Layer Up", image=icon_up, width=130, fg_color="#33424F", command=lambda: self.action_move(-1))
-        self.btn_act_up.pack(side=tk.LEFT, padx=2)
-        self.btn_act_dn = ctk.CTkButton(layer_bar, text="Layer Down", image=icon_dn, width=130, fg_color="#33424F", command=lambda: self.action_move(1))
-        self.btn_act_dn.pack(side=tk.LEFT, padx=2)
+        self.btn_act_ren = ctk.CTkButton(self.action_bar, text=" Rename ", image=icon_ren, width=82, height=28, fg_color="#33424F", command=self.action_rename)
+        self.btn_act_ren.grid(row=0, column=1, padx=(0, 4))
+
+        self.btn_act_col = ctk.CTkButton(self.action_bar, text=" Color ", image=icon_col, width=68, height=28, fg_color="#33424F", command=self.action_color)
+        self.btn_act_col.grid(row=0, column=2, padx=(0, 4))
+        
+        self.btn_act_cpy = ctk.CTkButton(self.action_bar, text=" Copy ", image=icon_cpy, width=65, height=28, fg_color="#33424F", command=self.action_copy)
+        self.btn_act_cpy.grid(row=0, column=3, padx=(0, 4))
+        
+        self.btn_act_up = ctk.CTkButton(self.action_bar, text="", image=icon_up, width=28, height=28, fg_color="#33424F", command=lambda: self.action_move(-1))
+        self.btn_act_up.grid(row=0, column=4, padx=(0, 4))
+        
+        self.btn_act_dn = ctk.CTkButton(self.action_bar, text="", image=icon_dn, width=28, height=28, fg_color="#33424F", command=lambda: self.action_move(1))
+        self.btn_act_dn.grid(row=0, column=5, padx=(0, 4))
+        
+        self.btn_act_del = ctk.CTkButton(self.action_bar, text="", image=icon_del, width=28, height=28, fg_color="#c9302c", hover_color="#a82824", command=self.delete_selected_zones)
+        self.btn_act_del.grid(row=0, column=6, padx=(0, 0))
 
         self.zone_list = ctk.CTkScrollableFrame(self.sidebar, fg_color=["#ffffff", "#051728"])
         self.zone_list.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
         
-        inst_text = "Shift-Click or Ctrl+A to multi-select!\n\nLeft Click: Add Point / Middle Mouse: Pan\nCtrl+Scroll: Zoom / Ctrl+Z: Global Undo\n\nEdit Keybinds (Select Zones First):\nDelete: Remove | Backspace: Reset Size\nCtrl+R: Rotate | Arrows: Move | + / -: Scale"
+        inst_text = "Text Label Mode: Drag to move text. Scroll to Scale. Shift+Scroll to Rotate!\n\nShift-Click or Ctrl+A to multi-select!\nLeft Click: Add Point / Middle Mouse: Pan\nCtrl+Scroll: Zoom / Ctrl+Z: Global Undo\n\nEdit Keybinds:\nDelete: Remove | Backspace: Reset Size\nCtrl+R: Rotate | Arrows: Move | + / -: Scale"
         ctk.CTkLabel(self.sidebar, text=inst_text, font=("Segoe UI", 11, "italic"), justify="left", text_color=["#666666", "#aaaaaa"]).pack(padx=15, pady=(0, 15), anchor="w")
 
         self.edit_panel = ctk.CTkFrame(self.canvas_frame, fg_color=["#2980b9", "#1A5276"], corner_radius=6)
@@ -189,24 +209,23 @@ class MapConfigurator(ctk.CTk):
         ctk.CTkButton(edit_btn_frame, text="Save", command=self.save_edit, width=80, fg_color="#217346", hover_color="#2a8f57").pack(side="left", padx=5)
         ctk.CTkButton(edit_btn_frame, text="Cancel", command=self.cancel_edit, width=80, fg_color="#c9302c", hover_color="#a82824").pack(side="left", padx=5)
 
+        self.action_bar.pack_propagate(False) 
         self._update_action_bar() 
 
     def change_draw_mode(self, new_mode):
         self.draw_mode = new_mode
-        
-        # Update colors to show which is active
-        if new_mode == "Polygon":
-            self.btn_poly.configure(fg_color="#2980b9")
-            self.btn_rect.configure(fg_color="#33424F")
-        else:
-            self.btn_poly.configure(fg_color="#33424F")
-            self.btn_rect.configure(fg_color="#2980b9")
+        # Unique Mode Colors
+        self.btn_poly.configure(fg_color="#2980b9" if new_mode == "Polygon" else "#33424F")
+        self.btn_rect.configure(fg_color="#8e44ad" if new_mode == "Rectangle" else "#33424F")
+        self.btn_label.configure(fg_color="#d35400" if new_mode == "Label" else "#33424F")
             
         self.cancel_edit()
         self.cancel_draw()
+        self.active_label_index = None
 
     def _bind_events(self):
         self.canvas.bind("<Control-MouseWheel>", self.handle_zoom)
+        self.canvas.bind("<MouseWheel>", self.handle_label_scroll)
         self.canvas.bind("<ButtonPress-2>", self.start_pan)
         self.canvas.bind("<B2-Motion>", self.do_pan)
         self.canvas.bind("<Configure>", lambda e: self._refresh_image_cache()) 
@@ -256,26 +275,33 @@ class MapConfigurator(ctk.CTk):
         selected_indices = [i for i, z in enumerate(self.zones) if z.get('selected', False)]
         count = len(selected_indices)
         
+        # Gatekeeper: Bulletproof state check that forces immediate UI resolution
+        def safe_state(btn, target_state):
+            if btn.cget("state") != target_state:
+                btn.configure(state=target_state)
+                btn.update_idletasks() # Force UI to swallow the state change instantly
+        
         if count == 0:
-            for btn in [self.btn_act_edit, self.btn_act_ren, self.btn_act_cpy, self.btn_act_del, self.btn_act_up, self.btn_act_dn]:
-                btn.configure(state="disabled")
+            for btn in [self.btn_act_edit, self.btn_act_ren, self.btn_act_col, self.btn_act_cpy, self.btn_act_del, self.btn_act_up, self.btn_act_dn]:
+                safe_state(btn, "disabled")
         elif count == 1:
-            for btn in [self.btn_act_edit, self.btn_act_ren, self.btn_act_cpy, self.btn_act_del, self.btn_act_up, self.btn_act_dn]:
-                btn.configure(state="normal")
-            if len(self.zones) == 1:
-                self.btn_act_up.configure(state="disabled")
-                self.btn_act_dn.configure(state="disabled")
+            for btn in [self.btn_act_edit, self.btn_act_ren, self.btn_act_col, self.btn_act_cpy, self.btn_act_del, self.btn_act_up, self.btn_act_dn]:
+                safe_state(btn, "normal")
+            if len(self.zones) <= 1:
+                safe_state(self.btn_act_up, "disabled")
+                safe_state(self.btn_act_dn, "disabled")
         else:
-            self.btn_act_edit.configure(state="disabled")
-            self.btn_act_ren.configure(state="disabled")
-            self.btn_act_cpy.configure(state="normal") 
-            self.btn_act_del.configure(state="normal") 
+            safe_state(self.btn_act_edit, "disabled")
+            safe_state(self.btn_act_ren, "disabled")
+            safe_state(self.btn_act_col, "normal")
+            safe_state(self.btn_act_cpy, "normal")
+            safe_state(self.btn_act_del, "normal")
             if count == len(self.zones):
-                self.btn_act_up.configure(state="disabled")
-                self.btn_act_dn.configure(state="disabled")
+                safe_state(self.btn_act_up, "disabled")
+                safe_state(self.btn_act_dn, "disabled")
             else:
-                self.btn_act_up.configure(state="normal")
-                self.btn_act_dn.configure(state="normal")
+                safe_state(self.btn_act_up, "normal")
+                safe_state(self.btn_act_dn, "normal")
 
     def _get_single_selected_index(self):
         selected = [i for i, z in enumerate(self.zones) if z.get('selected', False)]
@@ -294,8 +320,22 @@ class MapConfigurator(ctk.CTk):
             if new_name and new_name.strip():
                 self.commit_state()
                 self.zones[idx]['name'] = new_name.strip()
+                self.text_image_cache.pop(idx, None)
                 self.update_sidebar()
                 self.render_canvas()
+
+    def action_color(self):
+        selected = [i for i, z in enumerate(self.zones) if z.get('selected', False)]
+        if not selected: return
+        
+        default_color = self.zones[selected[0]].get('color', '#0E8187')
+        color_code = colorchooser.askcolor(title="Choose Zone Color", initialcolor=default_color)[1]
+        
+        if color_code:
+            self.commit_state()
+            for idx in selected:
+                self.zones[idx]['color'] = color_code
+            self.render_canvas()
 
     def action_copy(self):
         selected = [i for i, z in enumerate(self.zones) if z.get('selected', False)]
@@ -313,6 +353,11 @@ class MapConfigurator(ctk.CTk):
             
             offset = 20 / self.zoom_level
             new_zone['vertices'] = [(x + offset, y + offset) for x, y in new_zone['vertices']]
+            
+            if 'label' in new_zone:
+                new_zone['label']['x'] += offset
+                new_zone['label']['y'] += offset
+                
             new_zones.append(new_zone)
             
         self.zones.extend(new_zones)
@@ -328,10 +373,14 @@ class MapConfigurator(ctk.CTk):
             for idx in sorted(selected):
                 if idx > 0 and not self.zones[idx-1].get('selected'):
                     self.zones[idx], self.zones[idx-1] = self.zones[idx-1], self.zones[idx]
+                    self.text_image_cache.pop(idx, None)
+                    self.text_image_cache.pop(idx-1, None)
         else: 
             for idx in sorted(selected, reverse=True):
                 if idx < len(self.zones) - 1 and not self.zones[idx+1].get('selected'):
                     self.zones[idx], self.zones[idx+1] = self.zones[idx+1], self.zones[idx]
+                    self.text_image_cache.pop(idx, None)
+                    self.text_image_cache.pop(idx+1, None)
                     
         self.update_sidebar()
         self.render_canvas()
@@ -342,7 +391,7 @@ class MapConfigurator(ctk.CTk):
             if i in self.checkbox_vars:
                 self.checkbox_vars[i].set(True)
         self._update_action_bar()
-        self.render_canvas()
+        self.after(5, self.render_canvas) # Defer canvas render to prevent UI thread seizure
 
     def toggle_selection(self, zone_idx, var):
         is_checked = var.get()
@@ -359,7 +408,7 @@ class MapConfigurator(ctk.CTk):
             self.last_selected_index = zone_idx
             
         self._update_action_bar()
-        self.render_canvas() 
+        self.after(5, self.render_canvas) # Defer canvas render to prevent UI thread seizure 
 
     def commit_state(self):
         if len(self.global_undo_stack) > 50: self.global_undo_stack.pop(0) 
@@ -376,6 +425,7 @@ class MapConfigurator(ctk.CTk):
         if self.global_undo_stack:
             self.global_redo_stack.append(copy.deepcopy(self.zones))
             self.zones = self.global_undo_stack.pop()
+            self.text_image_cache.clear()
             self.update_sidebar()
             self.render_canvas()
 
@@ -388,6 +438,7 @@ class MapConfigurator(ctk.CTk):
         if self.global_redo_stack:
             self.global_undo_stack.append(copy.deepcopy(self.zones))
             self.zones = self.global_redo_stack.pop()
+            self.text_image_cache.clear()
             self.update_sidebar()
             self.render_canvas()
 
@@ -410,7 +461,13 @@ class MapConfigurator(ctk.CTk):
                     for z in data["zones"]: 
                         z['selected'] = False
                         z['original_vertices'] = list(z['vertices']) 
+                        
+                        if 'label' not in z:
+                            cx, cy = self._get_polygon_centroid(z['vertices'])
+                            z['label'] = {"x": cx, "y": cy, "rotation": 0, "base_font_size": 14}
+                            
                     self.zones = data["zones"]
+                    self.text_image_cache.clear()
                     self.update_sidebar()
                     self._refresh_image_cache() 
 
@@ -423,6 +480,7 @@ class MapConfigurator(ctk.CTk):
         if not selected_zones: return
         self.commit_state()
         self.zones = [z for z in self.zones if not z.get('selected', False)]
+        self.text_image_cache.clear()
         self.update_sidebar()
         self.render_canvas()
 
@@ -451,6 +509,15 @@ class MapConfigurator(ctk.CTk):
                     rx, ry = ty, -tx
                 new_verts.append((rx + cx, ry + cy))
             zone['vertices'] = new_verts
+            
+            if 'label' in zone:
+                lx, ly = zone['label']['x'], zone['label']['y']
+                tx, ty = lx - cx, ly - cy
+                rx, ry = (-ty, tx) if direction == "right" else (ty, -tx)
+                zone['label']['x'], zone['label']['y'] = rx + cx, ry + cy
+                zone['label']['rotation'] += 90 if direction == "right" else -90
+                
+        self.text_image_cache.clear()
         self.render_canvas()
 
     def nudge_zones(self, dx, dy):
@@ -464,6 +531,11 @@ class MapConfigurator(ctk.CTk):
         dy *= multiplier
         for zone in target_zones:
             zone['vertices'] = [(x + dx, y + dy) for x, y in zone['vertices']]
+            if 'label' in zone:
+                zone['label']['x'] += dx
+                zone['label']['y'] += dy
+                
+        self.text_image_cache.clear()
         self.render_canvas()
 
     def scale_zones(self, scale_factor):
@@ -486,6 +558,11 @@ class MapConfigurator(ctk.CTk):
         
         for zone in target_zones:
             zone['vertices'] = [(((x - cx) * dynamic_factor) + cx, ((y - cy) * dynamic_factor) + cy) for x, y in zone['vertices']]
+            if 'label' in zone:
+                zone['label']['x'] = (((zone['label']['x'] - cx) * dynamic_factor) + cx)
+                zone['label']['y'] = (((zone['label']['y'] - cy) * dynamic_factor) + cy)
+                
+        self.text_image_cache.clear()
         self.render_canvas()
 
     def _refresh_image_cache(self):
@@ -515,6 +592,7 @@ class MapConfigurator(ctk.CTk):
         else:
             self.photo_image = None
             
+        self.text_image_cache.clear() 
         self.render_canvas()
 
     def load_map(self):
@@ -538,12 +616,11 @@ class MapConfigurator(ctk.CTk):
             self.pan_x = (c_width - (self.original_image.width * self.zoom_level)) / 2
             self.pan_y = (c_height - (self.original_image.height * self.zoom_level)) / 2
             
+            self.text_image_cache.clear()
             self._refresh_image_cache()
 
     def handle_zoom(self, event):
         if not self.original_image: return
-        
-        # --- THE FIX: Culling engine for 144 FPS Zero-Lag zooming ---
         self._is_zooming = True
         
         zoom_factor = 1.1 if event.delta > 0 else 0.9
@@ -567,6 +644,24 @@ class MapConfigurator(ctk.CTk):
         else:
             self.render_canvas()
 
+    def handle_label_scroll(self, event):
+        if self.draw_mode != "Label" or self.active_label_index is None: return
+        
+        zone = self.zones[self.active_label_index]
+        if 'label' not in zone: return
+        
+        self.commit_state()
+        
+        if self.shift_held:
+            direction = 1 if event.delta > 0 else -1
+            zone['label']['rotation'] = (zone['label']['rotation'] + (15 * direction)) % 360
+        else:
+            delta = 1 if event.delta > 0 else -1
+            zone['label']['base_font_size'] = max(6, min(100, zone['label']['base_font_size'] + delta))
+            
+        self.text_image_cache.pop(self.active_label_index, None)
+        self.render_canvas()
+
     def _finalize_zoom(self):
         self._is_zooming = False
         self._refresh_image_cache()
@@ -584,6 +679,8 @@ class MapConfigurator(ctk.CTk):
         return screen_x, screen_y
 
     def set_hover(self, zone, state):
+        if zone.get('hovered', False) == state: 
+            return
         zone['hovered'] = state
         self.render_canvas()
 
@@ -624,6 +721,57 @@ class MapConfigurator(ctk.CTk):
         self._pan_start_x = event.x
         self._pan_start_y = event.y
         self._refresh_image_cache() 
+
+    def _get_rotated_text_image(self, index, text, font_size, rotation, is_selected=False):
+        cache_key = f"{index}_{font_size}_{rotation}_{is_selected}"
+        if index in self.text_image_cache and self.text_image_cache[index].get("key") == cache_key:
+            return self.text_image_cache[index]["img"]
+
+        try:
+            font = ImageFont.truetype("segoeuib.ttf", int(font_size))
+        except Exception:
+            font = ImageFont.load_default()
+
+        wrapped_text = "\n".join(textwrap.wrap(text, width=14))
+        lines = wrapped_text.split('\n')
+        
+        max_w = 0
+        total_h = 0
+        for line in lines:
+            try:
+                bbox = font.getbbox(line)
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                max_w = max(max_w, w)
+                total_h += h + 4 
+            except Exception:
+                max_w, total_h = 100, 50 
+
+        pad = int(font_size * 2)
+        img = Image.new('RGBA', (max_w + pad*2, total_h + pad*2), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        current_y = pad
+        for line in lines:
+            try:
+                bbox = font.getbbox(line)
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                x = pad + (max_w - w) / 2
+                
+                shadow_col = "#f39c12" if is_selected else "#000000"
+                draw.text((x+1, current_y+1), line, font=font, fill=shadow_col)
+                draw.text((x-1, current_y-1), line, font=font, fill=shadow_col)
+                draw.text((x, current_y), line, font=font, fill="#FFFFFF")
+                
+                current_y += h + 4
+            except Exception: pass
+
+        rotated = img.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=True)
+        photo = ImageTk.PhotoImage(rotated)
+        
+        self.text_image_cache[index] = {"key": cache_key, "img": photo}
+        return photo
 
     def render_canvas(self):
         if not self.original_image: return
@@ -678,8 +826,8 @@ class MapConfigurator(ctk.CTk):
 
     def _render_active_drawing(self):
         if self.editing_zone_index is not None or self._is_zooming: return
+        if self.draw_mode == "Label": return 
         
-        # --- THE FIX: High Visibility First-Vertex Crosshair ---
         if not self.active_vertices: 
             if self.current_mouse_x and self.current_mouse_y and self.original_image:
                 cx, cy = self.current_mouse_x, self.current_mouse_y
@@ -769,9 +917,31 @@ class MapConfigurator(ctk.CTk):
         self.current_mouse_y = event.y
         self.snap_lines = (None, None)
         
-        if self.editing_zone_index is not None and self.dragged_vertex_index is not None:
-            img_x, img_y = self.screen_to_image(event.x, event.y)
+        img_x, img_y = self.screen_to_image(event.x, event.y)
+        
+        if self.draw_mode == "Label" and self.active_label_index is not None and (event.state & 0x0100):
+            zone = self.zones[self.active_label_index]
+            if 'label' in zone:
+                zone['label']['x'] = img_x
+                zone['label']['y'] = img_y
+                self.render_canvas()
+                return
+        
+        if self.draw_mode == "Label":
+            hovered_idx = None
+            for i, zone in enumerate(self.zones):
+                if 'label' in zone:
+                    lx, ly = self.image_to_screen(zone['label']['x'], zone['label']['y'])
+                    if math.hypot(event.x - lx, event.y - ly) < 30:
+                        hovered_idx = i
+                        break
             
+            if hovered_idx is not None:
+                self.canvas.config(cursor="hand2")
+            else:
+                self.canvas.config(cursor="crosshair")
+        
+        if self.editing_zone_index is not None and self.dragged_vertex_index is not None:
             if event.state & 0x0001: 
                 zone = self.zones[self.editing_zone_index]
                 prev_idx = self.dragged_vertex_index - 1
@@ -784,14 +954,12 @@ class MapConfigurator(ctk.CTk):
             self.render_canvas()
             return
             
-        if event.state & 0x0100: 
+        if event.state & 0x0100 and self.draw_mode != "Label": 
             if self.mm_bounds:
                 x1, y1, x2, y2 = self.mm_bounds
                 if x1 <= event.x <= x2 and y1 <= event.y <= y2:
                     self.jump_to_minimap(event.x, event.y, x1, y1, x2, y2)
                     return
-
-        img_x, img_y = self.screen_to_image(event.x, event.y)
         
         if event.state & 0x0001 and self.active_vertices and self.draw_mode == "Polygon":
             last_x, last_y = self.active_vertices[-1]
@@ -821,11 +989,20 @@ class MapConfigurator(ctk.CTk):
             
             if zone_name:
                 self.commit_state()
+                cx, cy = self._get_polygon_centroid(self.active_vertices)
+                
                 self.zones.append({
                     "name": zone_name.strip(),
                     "selected": False,
                     "vertices": list(self.active_vertices),
-                    "original_vertices": list(self.active_vertices) 
+                    "original_vertices": list(self.active_vertices),
+                    "label": {
+                        "x": cx,
+                        "y": cy,
+                        "rotation": 0,
+                        "base_font_size": 14
+                    },
+                    "color": "#0E8187"
                 })
                 self.update_sidebar()
                 
@@ -835,6 +1012,18 @@ class MapConfigurator(ctk.CTk):
 
     def on_left_click(self, event):
         if not self.original_image: return
+        
+        if self.draw_mode == "Label":
+            for i, zone in enumerate(self.zones):
+                if 'label' in zone:
+                    lx, ly = self.image_to_screen(zone['label']['x'], zone['label']['y'])
+                    if math.hypot(event.x - lx, event.y - ly) < 40:
+                        self.active_label_index = i
+                        self.render_canvas()
+                        return
+            self.active_label_index = None
+            self.render_canvas()
+            return
         
         if self.editing_zone_index is not None:
             zone = self.zones[self.editing_zone_index]
@@ -897,9 +1086,7 @@ class MapConfigurator(ctk.CTk):
         self.vertex_redo_stack.clear()
         self.render_canvas()
 
-    # --- THE FIX: True Mathematical Centroid Math for L-Shapes ---
     def _get_polygon_centroid(self, vertices):
-        """Calculates area-weighted center of polygon instead of bounding box"""
         if len(vertices) < 3: return vertices[0] if vertices else (0, 0)
         
         pts = vertices + [vertices[0]]
@@ -917,13 +1104,12 @@ class MapConfigurator(ctk.CTk):
         return cx / (6 * area), cy / (6 * area)
 
     def _render_zones(self):
-        if self._is_zooming: return # Hide Zones entirely during active scroll!
+        if self._is_zooming: return 
         
         for i, zone in enumerate(reversed(self.zones)):
             actual_idx = len(self.zones) - 1 - i 
             
             screen_coords = []
-            
             for ix, iy in zone['vertices']:
                 sx, sy = self.image_to_screen(ix, iy)
                 screen_coords.extend([sx, sy])
@@ -932,7 +1118,9 @@ class MapConfigurator(ctk.CTk):
                 is_selected = zone.get('selected', False)
                 is_hovered = zone.get('hovered', False)
                 
-                fill_color = "#1ae6c5" if is_hovered else "#0E8187"
+                base_color = zone.get('color', "#0E8187")
+                fill_color = base_color
+                
                 outline_color = "#ffffff" if is_selected else ("#f39c12" if is_hovered else "#2EFAD9")
                 outline_width = 3 if (is_selected or is_hovered) else 2
                 
@@ -948,9 +1136,25 @@ class MapConfigurator(ctk.CTk):
                         px, py = self.image_to_screen(vx, vy)
                         self.canvas.create_oval(px-5, py-5, px+5, py+5, fill="#2980b9", outline="white", width=2)
                 
-                center_img_x, center_img_y = self._get_polygon_centroid(zone['vertices'])
-                center_scr_x, center_scr_y = self.image_to_screen(center_img_x, center_img_y)
-                self.canvas.create_text(center_scr_x, center_scr_y, text=zone['name'], fill="#FFFFFF", font=("Segoe UI", 10, "bold"), justify="center")
+                if 'label' in zone:
+                    lx, ly = self.image_to_screen(zone['label']['x'], zone['label']['y'])
+                    scaled_font = zone['label']['base_font_size'] * self.zoom_level
+                    
+                    if scaled_font > 4: 
+                        is_active_label = (self.active_label_index == actual_idx and self.draw_mode == "Label")
+                        
+                        txt_img = self._get_rotated_text_image(
+                            actual_idx, 
+                            zone['name'], 
+                            scaled_font, 
+                            zone['label']['rotation'], 
+                            is_selected=is_active_label
+                        )
+                        
+                        self.canvas.create_image(lx, ly, anchor=tk.CENTER, image=txt_img)
+                        
+                        if is_active_label:
+                            self.canvas.create_oval(lx-4, ly-4, lx+4, ly+4, fill="#f39c12", outline="#ffffff", width=2)
 
     def update_sidebar(self):
         self.checkbox_vars.clear()

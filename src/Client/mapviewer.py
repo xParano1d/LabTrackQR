@@ -7,8 +7,9 @@ import json
 import shutil
 import ctypes
 import winreg
+import textwrap
 from datetime import datetime
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageFont, ImageDraw, ImageFilter
 
 def resource_path(file_name):
     try:
@@ -37,7 +38,7 @@ class MapViewerWindow:
             ctk.set_default_color_theme(theme_path)
             
         self.viewer = ctk.CTkToplevel(parent_root)
-        self.viewer.title("LabTrackQR - Digital Twin Map")
+        self.viewer.title("Laboratory Storage Map")
         
         width, height = 1400, 850
         self.viewer.update_idletasks()
@@ -55,7 +56,7 @@ class MapViewerWindow:
         
         self.viewer.after(200, self._update_window_theme_elements)
         
-        self.local_map_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'MapData')
+        self.local_map_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR')
         os.makedirs(self.local_map_dir, exist_ok=True)
         
         self.image_path = None
@@ -78,10 +79,12 @@ class MapViewerWindow:
         self._is_zooming = False
         
         self.sheet_height = 350
-        self.sheet_target_y = height
-        self.sheet_current_y = height
+        self.sheet_target_y = 5000 
+        self.sheet_current_y = 5000
         self.sheet_is_open = False
         self.active_zone_name = None
+        
+        self.text_image_cache = {}
         
         self._sync_network_map()
         self._build_ui()
@@ -91,7 +94,7 @@ class MapViewerWindow:
         self.viewer.after(100, self._load_local_map)
 
     def _sync_network_map(self):
-        r"""Safely copies map.png and map.json from the Server Z:\ drive to LocalAppData."""
+        r"""Safely copies map.png and map.json from the Server to LocalAppData, with silent offline fallback."""
         try:
             sys.path.append(os.path.join(os.path.dirname(__file__)))
             from config import BASE_PATH
@@ -99,20 +102,31 @@ class MapViewerWindow:
         except Exception:
             network_dir = r"Z:\Sample Tracking Tool\laboratory_map"
             
+        # 1. Check if we already have a working offline cache on the hard drive
+        has_cache = (os.path.exists(os.path.join(self.local_map_dir, "map.json")) and 
+                     os.path.exists(os.path.join(self.local_map_dir, "map.png")))
+
         try:
             if not os.path.exists(network_dir): 
-                self.notify("Cannot fetch map from server.\nNetwork drive unreachable.")
+                # If server is down and we HAVE NO cache, warn the user.
+                if not has_cache:
+                    self.notify("Cannot fetch map from server.\nNo local offline cache available.")
+                # If server is down but we HAVE a cache, stay completely silent and load the cache!
                 return
             
+            # 2. Server is online! Check for updates and re-cache if the Admin changed something
             for file_name in ["map.json", "map.png"]:
                 net_file = os.path.join(network_dir, file_name)
                 loc_file = os.path.join(self.local_map_dir, file_name)
                 
                 if os.path.exists(net_file):
+                    # If local file is missing, OR server file is modified more recently -> overwrite cache
                     if not os.path.exists(loc_file) or os.path.getmtime(net_file) > os.path.getmtime(loc_file):
                         shutil.copy2(net_file, loc_file)
+                        
         except Exception:
-            self.notify("Cannot fetch map from server.\nTry again later.")
+            if not has_cache:
+                self.notify("Cannot fetch map from server.\nTry again later.")
 
     def _build_data_bridge(self):
         self.inventory_map.clear()
@@ -126,8 +140,10 @@ class MapViewerWindow:
             self.inventory_map[raw_loc].append(row)
             
         drawn_zone_names = {z['name'].lower() for z in self.zones}
-        unmapped_count = sum(len(items) for loc, items in self.inventory_map.items() if loc not in drawn_zone_names and "verification" not in loc)
-        self.btn_other_locs.configure(text=f"Other Locations ({unmapped_count})")
+        self.unmapped_count = sum(len(items) for loc, items in self.inventory_map.items() if loc not in drawn_zone_names and "verification" not in loc)
+        
+        if hasattr(self, 'btn_other_locs'):
+            self.btn_other_locs.configure(text=f"Other Locations ({self.unmapped_count})")
 
     def _update_window_theme_elements(self):
         try:
@@ -160,19 +176,23 @@ class MapViewerWindow:
         self.viewer.grid_rowconfigure(0, weight=1)
         self.viewer.grid_columnconfigure(0, weight=1) 
         
+        mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
+        canvas_bg = ctk.ThemeManager.theme["CTk"]["fg_color"][mode_idx]
+        panel_bg = ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"][mode_idx]
+        text_color = ctk.ThemeManager.theme["CTkLabel"]["text_color"][mode_idx]
+        
         self.canvas_frame = ctk.CTkFrame(self.viewer, corner_radius=0)
         self.canvas_frame.grid(row=0, column=0, sticky="nsew")
         
-        self.canvas = tk.Canvas(self.canvas_frame, bg="#1e1e1e", highlightthickness=0)
+        self.canvas = tk.Canvas(self.canvas_frame, bg=canvas_bg, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # --- RADAR & HEATMAP (Rebuilt to match LogViewer exact styling) ---
-        self.top_hud = ctk.CTkFrame(self.canvas_frame, fg_color=ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"], corner_radius=8, border_width=2, border_color=["#d0d0d0", "#1A3A5A"])
+        self.top_hud = ctk.CTkFrame(self.viewer, fg_color=panel_bg, bg_color=canvas_bg, corner_radius=8, border_width=2, border_color=["#d0d0d0", "#1A3A5A"])
         self.top_hud.place(relx=0.5, y=20, anchor="n")
         
         try:
             s_img = Image.open(resource_path("search.png"))
-            self.icon_search = ctk.CTkImage(s_img, size=(20, 20))
+            self.icon_search = ctk.CTkImage(s_img, size=(16, 16))
         except Exception:
             self.icon_search = None
 
@@ -192,33 +212,56 @@ class MapViewerWindow:
         ctk.CTkFrame(self.top_hud, width=2, height=24, fg_color=["#d0d0d0", "#33424F"]).pack(side=tk.LEFT, padx=10)
         
         self.heatmap_var = ctk.BooleanVar(value=False)
-        ctk.CTkSwitch(self.top_hud, text="Density Heatmap", variable=self.heatmap_var, command=self.render_canvas, font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT, padx=(5, 15))
+        # Custom colors injected to lock the ON state to bright teal, completely fixing the gray bug
+        self.btn_heatmap = ctk.CTkSwitch(
+            self.top_hud, text="Density Heatmap", variable=self.heatmap_var, 
+            command=self.toggle_heatmap, font=("Segoe UI", 12, "bold"),
+            progress_color="#1ae6c5", button_color="#0E8187", button_hover_color="#2EFAD9"
+        )
+        self.btn_heatmap.pack(side=tk.LEFT, padx=(5, 15))
 
-        # --- STATIC ZONES (Fixed ghost background artifacts) ---
-        self.static_hud = ctk.CTkFrame(self.canvas_frame, fg_color="transparent", bg_color="transparent")
+       # --- HEATMAP LEGEND ---
+        self.legend_frame = ctk.CTkFrame(self.canvas_frame, fg_color=panel_bg, corner_radius=8, border_width=2, border_color=["#d0d0d0", "#1A3A5A"])
+        ctk.CTkLabel(self.legend_frame, text="Sample Density", font=("Segoe UI", 12, "bold")).pack(pady=(5, 0))
+        
+        self.gradient_canvas = tk.Canvas(self.legend_frame, width=200, height=35, bg=panel_bg, highlightthickness=0)
+        self.gradient_canvas.pack(padx=10, pady=(0, 5))
+        
+        # Draw 8-Stop Meteorological Gradient
+        def interpolate(color1, color2, t):
+            return tuple(int(c1 + (c2 - c1) * t) for c1, c2 in zip(color1, color2))
+            
+        stops = [(20, 20, 80), (30, 100, 200), (0, 255, 255), (0, 255, 0), (255, 255, 0), (255, 128, 0), (255, 0, 0), (139, 0, 0)]
+        for i in range(200):
+            t = i / 199.0
+            idx = min(6, int(t * 7))
+            t_local = (t - (idx / 7.0)) * 7.0
+            r, g, b = interpolate(stops[idx], stops[idx+1], t_local)
+            self.gradient_canvas.create_line(i, 0, i, 15, fill=f"#{r:02x}{g:02x}{b:02x}")
+            
+        self.legend_min = self.gradient_canvas.create_text(5, 25, text="0", fill=text_color, font=("Segoe UI", 10, "bold"), anchor="w")
+        self.legend_mid = self.gradient_canvas.create_text(100, 25, text="5", fill=text_color, font=("Segoe UI", 10, "bold"), anchor="center")
+        self.legend_max = self.gradient_canvas.create_text(195, 25, text="10", fill=text_color, font=("Segoe UI", 10, "bold"), anchor="e")
+
+        self.static_hud = ctk.CTkFrame(self.viewer, fg_color=canvas_bg, bg_color=canvas_bg, corner_radius=8)
         self.static_hud.place(x=20, rely=1.0, y=-20, anchor="sw")
         
-        self.btn_pending = ctk.CTkButton(self.static_hud, text="Verification Queue", bg_color="transparent", fg_color="#06B6D4", hover_color="#2EFAD9", text_color="#051728", font=("Segoe UI", 13, "bold"), height=40, command=lambda: self.open_bottom_sheet("verification queue"))
+        self.btn_pending = ctk.CTkButton(self.static_hud, text="Verification Queue", fg_color="#06B6D4", hover_color="#2EFAD9", text_color="#051728", font=("Segoe UI", 13, "bold"), height=40, corner_radius=6, command=lambda: self.open_bottom_sheet("verification queue"))
         self.btn_pending.pack(pady=(0, 10), fill=tk.X)
         
-        self.btn_other_locs = ctk.CTkButton(self.static_hud, text="Other Locations", bg_color="transparent", fg_color="#33424F", font=("Segoe UI", 13, "bold"), height=40, command=lambda: self.open_bottom_sheet("OTHER"))
+        self.btn_other_locs = ctk.CTkButton(self.static_hud, text="Other Locations", fg_color="#33424F", font=("Segoe UI", 13, "bold"), height=40, corner_radius=6, command=lambda: self.open_bottom_sheet("OTHER"))
         self.btn_other_locs.pack(fill=tk.X)
 
-        # --- BOTTOM SHEET ---
-        mode_idx = 1 if ctk.get_appearance_mode() == "Dark" else 0
-        sheet_bg = ctk.ThemeManager.theme["CTk"]["fg_color"][mode_idx]
-        header_bg = ctk.ThemeManager.theme["CTkFrame"]["top_fg_color"][mode_idx]
-
-        self.bottom_sheet = ctk.CTkFrame(self.viewer, height=self.sheet_height, corner_radius=0, fg_color=sheet_bg, border_width=2, border_color=["#d0d0d0", "#1A3A5A"])
+        self.bottom_sheet = ctk.CTkFrame(self.viewer, height=2000, corner_radius=0, fg_color=canvas_bg, border_width=2, border_color=["#d0d0d0", "#1A3A5A"])
         self.bottom_sheet.pack_propagate(False)
-        self.bottom_sheet.place(relx=0, y=self.viewer.winfo_height(), relwidth=1.0)
+        self.bottom_sheet.place(relx=0, y=self.sheet_target_y, relwidth=1.0)
         
         self.drag_handle = ctk.CTkFrame(self.bottom_sheet, height=12, fg_color=["#d0d0d0", "#1A3A5A"], corner_radius=0, cursor="sb_v_double_arrow")
         self.drag_handle.pack(fill=tk.X)
         self.drag_handle.bind("<ButtonPress-1>", self.start_sheet_resize)
         self.drag_handle.bind("<B1-Motion>", self.do_sheet_resize)
         
-        sheet_header = ctk.CTkFrame(self.bottom_sheet, fg_color=header_bg, corner_radius=0)
+        sheet_header = ctk.CTkFrame(self.bottom_sheet, fg_color=panel_bg, corner_radius=0)
         sheet_header.pack(fill=tk.X)
         
         self.sheet_title = ctk.CTkLabel(sheet_header, text="Zone Details", font=("Segoe UI", 20, "bold"))
@@ -226,16 +269,14 @@ class MapViewerWindow:
         
         ctk.CTkButton(sheet_header, text="X", width=30, height=30, fg_color="#d9534f", hover_color="#ff474c", text_color="white", font=("Segoe UI", 14, "bold"), command=self.close_bottom_sheet).pack(side=tk.RIGHT, padx=10)
 
-        # Data Table
         style = ttk.Style(self.viewer)
         style.theme_use("default")
         
-        text_color = ctk.ThemeManager.theme["CTkLabel"]["text_color"][mode_idx]
         selected_color = ctk.ThemeManager.theme["CTkButton"]["fg_color"][mode_idx]
 
-        style.configure("Map.Treeview", background=sheet_bg, foreground=text_color, rowheight=28, fieldbackground=sheet_bg, borderwidth=0, font=("Segoe UI", 10))
+        style.configure("Map.Treeview", background=canvas_bg, foreground=text_color, rowheight=28, fieldbackground=canvas_bg, borderwidth=0, font=("Segoe UI", 10))
         style.map('Map.Treeview', background=[('selected', selected_color)], foreground=[('selected', '#FFFFFF')])
-        style.configure("Map.Treeview.Heading", background=header_bg, foreground=text_color, relief="flat", font=("Segoe UI", 11, "bold"))
+        style.configure("Map.Treeview.Heading", background=panel_bg, foreground=text_color, relief="flat", font=("Segoe UI", 11, "bold"))
 
         columns = ("Date", "Time", "Location", "Sample ID", "Requestor", "Project Number", "User")
         self.tree = ttk.Treeview(self.bottom_sheet, columns=columns, show="headings", style="Map.Treeview")
@@ -274,31 +315,31 @@ class MapViewerWindow:
             if self.sheet_is_open:
                 self.sheet_target_y = self.viewer.winfo_height() - self.sheet_height
             else:
-                self.sheet_target_y = self.viewer.winfo_height()
+                self.sheet_target_y = 5000
             self.bottom_sheet.place(y=self.sheet_target_y)
             self.sheet_current_y = self.sheet_target_y
 
     def start_sheet_resize(self, event):
         self._resize_start_y = event.y_root
-        self._resize_start_height = self.sheet_height
+        self._resize_start_sheet_y = self.sheet_target_y
 
     def do_sheet_resize(self, event):
         dy = event.y_root - self._resize_start_y
-        new_height = self._resize_start_height - dy
-        new_height = max(200, min(new_height, self.viewer.winfo_height() - 100))
+        new_y = self._resize_start_sheet_y + dy
         
-        self.sheet_height = new_height
-        self.sheet_target_y = self.viewer.winfo_height() - self.sheet_height
-        self.sheet_current_y = self.sheet_target_y
-        self.bottom_sheet.configure(height=self.sheet_height)
-        self.bottom_sheet.place(y=self.sheet_target_y)
+        min_y = self.viewer.winfo_height() * 0.15 
+        max_y = self.viewer.winfo_height() - 100  
+        new_y = max(min_y, min(new_y, max_y))
+        
+        self.sheet_height = self.viewer.winfo_height() - new_y
+        self.sheet_target_y = new_y
+        self.sheet_current_y = new_y
+        self.bottom_sheet.place(y=new_y)
 
-    # --- THE FIX: Cleaned up Popups and Safety Checks ---
     def radar_ping(self):
         target = self.search_var.get().strip().lower()
         if not target: return
         
-        # Rigorously clear any stuck pings before starting a new search
         for z in self.zones: z['pinged'] = False
         
         found_loc = None
@@ -312,22 +353,19 @@ class MapViewerWindow:
             if found_loc: break
             
         if found_loc:
-            # 1. Is it drawn on the map?
             for i, z in enumerate(self.zones):
                 if z['name'].lower() == found_loc:
                     self.jump_to_zone(i)
-                    self._flash_zone(i, 7) # Start on 7 to guarantee it ends on False
+                    self._flash_zone(i, 7) 
                     self.search_var.set("") 
                     return
             
-            # 2. Is it in Verification Queue?
             if "verification" in found_loc or "pending" in found_loc:
                 self.open_bottom_sheet("verification queue")
                 self.notify(f"Item '{target.upper()}' found\nin Verification Queue.")
                 self.search_var.set("")
                 return
             
-            # 3. Otherwise, it is an Unmapped Location
             self.open_bottom_sheet("OTHER")
             self.notify(f"Item '{target.upper()}' found\nin Unmapped Locations.")
             self.search_var.set("")
@@ -343,6 +381,17 @@ class MapViewerWindow:
         self.zones[index]['pinged'] = (flashes % 2 != 0)
         self.render_canvas()
         self.viewer.after(250, lambda: self._flash_zone(index, flashes - 1))
+
+    def _get_visual_center(self, vertices):
+        """Fallback for older maps missing custom label configuration"""
+        if not vertices: return 0, 0
+        min_x = min(x for x, y in vertices)
+        max_x = max(x for x, y in vertices)
+        min_y = min(y for x, y in vertices)
+        max_y = max(y for x, y in vertices)
+        
+        cx, cy = (min_x + max_x) / 2, (min_y + max_y) / 2
+        return cx, cy
 
     def _load_local_map(self):
         self.viewer.update_idletasks()
@@ -381,6 +430,7 @@ class MapViewerWindow:
             self.pan_x = (c_width - (self.original_image.width * self.zoom_level)) / 2
             self.pan_y = (c_height - (self.original_image.height * self.zoom_level)) / 2
             
+            self.text_image_cache.clear()
             self._refresh_image_cache()
         except Exception as e:
             self.notify(f"Map Load Error:\n{e}")
@@ -389,8 +439,11 @@ class MapViewerWindow:
         if not self.original_image: return
         zone = self.zones[index]
         
-        cx, cy = self._get_visual_center(zone['vertices'])
-        
+        if 'label' in zone:
+            cx, cy = zone['label']['x'], zone['label']['y']
+        else:
+            cx, cy = self._get_visual_center(zone['vertices'])
+            
         c_width = self.canvas.winfo_width()
         c_height = self.canvas.winfo_height()
         
@@ -415,10 +468,14 @@ class MapViewerWindow:
         if not self.sheet_is_open:
             self.sheet_target_y = self.viewer.winfo_height() - self.sheet_height
             self.sheet_is_open = True
+            
+            if self.sheet_current_y > self.viewer.winfo_height():
+                self.sheet_current_y = self.viewer.winfo_height()
+                
             self._animate_sheet()
 
     def close_bottom_sheet(self):
-        self.sheet_target_y = self.viewer.winfo_height()
+        self.sheet_target_y = self.viewer.winfo_height() + 50
         if self.sheet_is_open:
             self.sheet_is_open = False
             self._animate_sheet()
@@ -513,6 +570,97 @@ class MapViewerWindow:
         elif self.sheet_is_open:
             self.close_bottom_sheet()
 
+    def toggle_heatmap(self):
+        if self.heatmap_var.get():
+            self.legend_frame.place(relx=1.0, rely=1.0, x=-20, y=-20, anchor="se")
+            self._build_heatmap_image()
+        else:
+            self.legend_frame.place_forget()
+        self._refresh_image_cache()
+
+    def _build_heatmap_image(self):
+        if not self.original_image: return
+        
+        mapped_counts = [len(self.inventory_map.get(zone['name'].lower(), [])) for zone in self.zones]
+        max_items = max(mapped_counts + [1])
+        
+        if hasattr(self, 'gradient_canvas'):
+            mid_val = max_items // 2 if max_items > 2 else 1
+            self.gradient_canvas.itemconfig(self.legend_min, text="0")
+            self.gradient_canvas.itemconfig(self.legend_mid, text=str(mid_val))
+            self.gradient_canvas.itemconfig(self.legend_max, text=str(max_items))
+        
+        scale = 0.5
+        w, h = int(self.original_image.width * scale), int(self.original_image.height * scale)
+        
+        # 1. Cover the entire window with a professional dark navy-blue meteorological base tint
+        base_overlay = Image.new('RGBA', (w, h), (15, 20, 45, 210))
+        
+        blob_layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(blob_layer)
+        
+        # Exact 8-Stop Meteorological Palette: Dark Blue -> Light Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Dark Red
+        palette = [
+            (20, 20, 60, 0),        # 0.00: Transparent (0 items)
+            (30, 90, 180, 180),     # 0.15: Dark Blue (1 item)
+            (0, 200, 220, 200),     # 0.30: Light Blue / Cyan
+            (0, 220, 80, 220),      # 0.45: Green
+            (220, 220, 0, 230),     # 0.60: Yellow
+            (240, 130, 0, 240),     # 0.75: Orange
+            (230, 30, 30, 250),     # 0.90: Red
+            (140, 0, 0, 255)        # 1.00: Dark Red (Max items)
+        ]
+        
+        def get_palette_color(t):
+            t = max(0.0, min(1.0, t))
+            idx = t * (len(palette) - 1)
+            i = int(idx)
+            frac = idx - i
+            if i >= len(palette) - 1:
+                return palette[-1]
+            c1, c2 = palette[i], palette[i+1]
+            return tuple(int(c1[j] + (c2[j] - c1[j]) * frac) for j in range(4))
+
+        for zone in self.zones:
+            item_count = len(self.inventory_map.get(zone['name'].lower(), []))
+            
+            # 0 items = Zero blob drawn. It stays pure dark navy blue!
+            if item_count == 0: continue
+            
+            # Use a square-root curve (KDE standard) so even 1 item pops nicely against 7 items
+            density = min(1.0, (item_count / max_items) ** 0.75)
+            color = get_palette_color(density)
+            
+            min_x = min(x for x, y in zone['vertices'])
+            max_x = max(x for x, y in zone['vertices'])
+            min_y = min(y for x, y in zone['vertices'])
+            max_y = max(y for x, y in zone['vertices'])
+            
+            room_w = (max_x - min_x) * scale
+            room_h = (max_y - min_y) * scale
+            
+            # Strictly constrain radius to the room's bounds so it never overlaps walls or adjacent rooms
+            radius = max(12, min(room_w, room_h) * 0.38)
+            
+            # Use the precise custom label coordinate defined in the Map Creator
+            if 'label' in zone:
+                cx, cy = zone['label']['x'] * scale, zone['label']['y'] * scale
+            else:
+                cx, cy = (min_x + max_x) * 0.5 * scale, (min_y + max_y) * 0.5 * scale
+            
+            # Draw sharp core hot spot
+            draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), fill=color)
+            
+        # 2. Gentle blur to create seamless, high-end meteorological thermal contours
+        blob_layer = blob_layer.filter(ImageFilter.GaussianBlur(radius=6))
+        
+        # 3. Fuse seamlessly over the dark blue base map
+        final_overlay = Image.alpha_composite(base_overlay, blob_layer)
+        
+        # 4. Upscale back to high-res display
+        overlay_full = final_overlay.resize(self.original_image.size, Image.Resampling.BICUBIC)
+        self.heatmap_image = Image.alpha_composite(self.original_image.copy(), overlay_full)
+
     def _refresh_image_cache(self):
         if not self.original_image: return
         self.viewer.update_idletasks()
@@ -520,13 +668,16 @@ class MapViewerWindow:
         c_height = self.canvas.winfo_height()
         if c_width <= 10 or c_height <= 10: return
 
+        # Determine whether to cut from the normal map or the glowing heatmap
+        source_image = self.heatmap_image if self.heatmap_var.get() and hasattr(self, 'heatmap_image') else self.original_image
+
         left = max(0, int(-self.pan_x / self.zoom_level))
         top = max(0, int(-self.pan_y / self.zoom_level))
-        right = min(self.original_image.width, int((c_width - self.pan_x) / self.zoom_level))
-        bottom = min(self.original_image.height, int((c_height - self.pan_y) / self.zoom_level))
+        right = min(source_image.width, int((c_width - self.pan_x) / self.zoom_level))
+        bottom = min(source_image.height, int((c_height - self.pan_y) / self.zoom_level))
 
         if right > left and bottom > top:
-            cropped = self.original_image.crop((left, top, right, bottom))
+            cropped = source_image.crop((left, top, right, bottom))
             new_width = int((right - left) * self.zoom_level)
             new_height = int((bottom - top) * self.zoom_level)
 
@@ -539,6 +690,7 @@ class MapViewerWindow:
         else:
             self.photo_image = None
             
+        self.text_image_cache.clear()
         self.render_canvas()
 
     def handle_zoom(self, event):
@@ -583,49 +735,61 @@ class MapViewerWindow:
         self._pan_start_y = event.y
         self._refresh_image_cache() 
 
-    # --- THE FIX: Pole of Inaccessibility (Grid Scanner) for precise L-Shape centering ---
-    def _get_visual_center(self, vertices):
-        if not vertices: return 0, 0
-        
-        min_x = min(x for x, y in vertices)
-        max_x = max(x for x, y in vertices)
-        min_y = min(y for x, y in vertices)
-        max_y = max(y for x, y in vertices)
-        
-        def is_inside(x, y):
-            inside = False
-            j = len(vertices) - 1
-            for i in range(len(vertices)):
-                if ((vertices[i][1] > y) != (vertices[j][1] > y)) and \
-                   (x < (vertices[j][0] - vertices[i][0]) * (y - vertices[i][1]) / (vertices[j][1] - vertices[i][1]) + vertices[i][0]):
-                    inside = not inside
-                j = i
-            return inside
+    # --- NEW PIL TEXT ROTATION ENGINE (Ported from Creator) ---
+    def _get_rotated_text_image(self, index, zone_name, item_count, font_size, rotation, is_selected=False):
+        cache_key = f"{index}_{item_count}_{font_size}_{rotation}_{is_selected}"
+        if index in self.text_image_cache and self.text_image_cache[index].get("key") == cache_key:
+            return self.text_image_cache[index]["img"]
 
-        # 1. Try mathematical centroid first
-        ax = sum(x for x, y in vertices) / len(vertices)
-        ay = sum(y for x, y in vertices) / len(vertices)
+        try:
+            font = ImageFont.truetype("segoeuib.ttf", int(font_size))
+        except Exception:
+            font = ImageFont.load_default()
+
+        # Wrap text logically and append item count
+        wrapped_name = "\n".join(textwrap.wrap(zone_name, width=14))
+        full_text = f"{wrapped_name}\n({item_count})"
+        lines = full_text.split('\n')
         
-        if is_inside(ax, ay):
-            return ax, ay
-            
-        # 2. If it falls outside (concave L-Shape), scan a grid to find the deepest internal point
-        best_pt = (ax, ay)
-        max_score = -1
-        
-        for i in range(5, 100, 10):
-            for j in range(5, 100, 10):
-                tx = min_x + (max_x - min_x) * (i / 100.0)
-                ty = min_y + (max_y - min_y) * (j / 100.0)
+        max_w = 0
+        total_h = 0
+        for line in lines:
+            try:
+                bbox = font.getbbox(line)
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                max_w = max(max_w, w)
+                total_h += h + 4 
+            except Exception:
+                max_w, total_h = 100, 50 
+
+        pad = int(font_size * 2)
+        img = Image.new('RGBA', (max_w + pad*2, total_h + pad*2), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        current_y = pad
+        for line in lines:
+            try:
+                bbox = font.getbbox(line)
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                x = pad + (max_w - w) / 2
                 
-                if is_inside(tx, ty):
-                    # Favor points closer to the mathematical center to keep text naturally aligned
-                    score = -abs(tx - (min_x+max_x)/2) - abs(ty - (min_y+max_y)/2)
-                    if score > max_score or max_score == -1:
-                        max_score = score
-                        best_pt = (tx, ty)
+                # Draw stroke/outline
+                shadow_col = "#f39c12" if is_selected else "#000000"
+                for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1), (0, 1), (0, -1), (1, 0), (-1, 0)]:
+                    draw.text((x + dx, current_y + dy), line, font=font, fill=shadow_col)
+                # Main Text
+                draw.text((x, current_y), line, font=font, fill="#FFFFFF")
                         
-        return best_pt
+                current_y += h + 4
+            except Exception: pass
+
+        rotated = img.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=True)
+        photo = ImageTk.PhotoImage(rotated)
+        
+        self.text_image_cache[index] = {"key": cache_key, "img": photo}
+        return photo
 
     def render_canvas(self):
         if not self.original_image: return
@@ -639,45 +803,71 @@ class MapViewerWindow:
         max_items = max([len(items) for items in self.inventory_map.values()] + [1])
         is_heatmap = self.heatmap_var.get()
         
-        # --- THE FIX: Less aggressive text scaling ---
-        font_size = max(8, min(14, int(11 * self.zoom_level)))
-        
-        for zone in reversed(self.zones):
+        for i, zone in enumerate(reversed(self.zones)):
+            actual_idx = len(self.zones) - 1 - i 
+            
             screen_coords = []
             for ix, iy in zone['vertices']:
                 sx, sy = self.image_to_screen(ix, iy)
                 screen_coords.extend([sx, sy])
                 
             if len(screen_coords) >= 6: 
+                item_count = len(self.inventory_map.get(zone['name'].lower(), []))
                 is_hovered = zone.get('hovered', False)
                 is_pinged = zone.get('pinged', False)
-                item_count = len(self.inventory_map.get(zone['name'].lower(), []))
                 
-                fill_color = "#1ae6c5" if is_hovered else "#0E8187"
+                base_color = zone.get('color', "#0E8187")
+                fill_color = "#1ae6c5" if is_hovered else base_color
                 outline_color = "#f39c12" if is_hovered else "#2EFAD9"
                 outline_width = 3 if is_hovered else 2
                 
-                if is_heatmap:
-                    density = item_count / max_items
-                    if item_count == 0:
-                        fill_color, outline_color, outline_width = "", "#33424F", 1
-                    elif density < 0.33:
-                        fill_color, outline_color = "#217346", "#09ce66" 
-                    elif density < 0.66:
-                        fill_color, outline_color = "#d68910", "#f39c12" 
-                    else:
-                        fill_color, outline_color = "#a82824", "#d9534f" 
-                
                 if is_pinged:
                     fill_color, outline_color, outline_width = "#09ce66", "#ffffff", 4
+                elif is_heatmap and is_hovered:
+                    fill_color, outline_color, outline_width = "", "#f39c12", 3
                 
-                self.canvas.create_polygon(screen_coords, fill=fill_color, outline=outline_color, width=outline_width, stipple="gray50")
+                # Hide geometric polygons if Heatmap is ON (unless pinged by Radar Search or Hovered)
+                if not is_heatmap or is_pinged or is_hovered:
+                    self.canvas.create_polygon(screen_coords, fill=fill_color if not is_heatmap else (fill_color if is_pinged else ""), outline=outline_color, width=outline_width, stipple="gray50")
                 
-                if not is_heatmap:
-                    cx, cy = self._get_visual_center(zone['vertices'])
-                    center_scr_x, center_scr_y = self.image_to_screen(cx, cy)
-                    
-                    display_text = f"{zone['name']}\n({item_count} items)"
-                    
-                    self.canvas.create_text(center_scr_x+1, center_scr_y+1, text=display_text, fill="#000000", font=("Segoe UI", font_size, "bold"), justify="center")
-                    self.canvas.create_text(center_scr_x, center_scr_y, text=display_text, fill="#FFFFFF", font=("Segoe UI", font_size, "bold"), justify="center")
+                # Show text normally, but in heatmap mode ONLY show on hover/ping to keep the map visually clean
+                show_text = (not is_heatmap) or is_hovered or is_pinged
+                
+                if show_text:
+                    if 'label' in zone:
+                        lx, ly = self.image_to_screen(zone['label']['x'], zone['label']['y'])
+                        scaled_font = zone['label']['base_font_size'] * self.zoom_level
+                        
+                        # Only draw if the scaled font is visible enough
+                        if scaled_font > 4: 
+                            txt_img = self._get_rotated_text_image(
+                                actual_idx, 
+                                zone['name'],
+                                item_count,
+                                scaled_font, 
+                                zone['label']['rotation'], 
+                                is_selected=(is_hovered or is_pinged)
+                            )
+                            self.canvas.create_image(lx, ly, anchor=tk.CENTER, image=txt_img)
+                    else:
+                        # Fallback for old configs without 'label'
+                        min_x = min(x for x, y in screen_coords[::2])
+                        max_x = max(x for x, y in screen_coords[::2])
+                        min_y = min(y for x, y in screen_coords[1::2])
+                        max_y = max(y for x, y in screen_coords[1::2])
+                        
+                        room_screen_w = max_x - min_x
+                        room_screen_h = max_y - min_y
+                        
+                        if room_screen_w > 70 and room_screen_h > 40:
+                            cx, cy = self._get_visual_center(zone['vertices'])
+                            center_scr_x, center_scr_y = self.image_to_screen(cx, cy)
+                            
+                            dynamic_font = max(8, min(14, int(room_screen_w / 12)))
+                            wrap_chars = max(8, int(room_screen_w / (dynamic_font * 0.7)))
+                            
+                            wrapped_name = "\n".join(textwrap.wrap(zone['name'], width=wrap_chars))
+                            display_text = f"{wrapped_name}\n({item_count})"
+                            
+                            self.canvas.create_text(center_scr_x+1, center_scr_y+1, text=display_text, fill="#000000", font=("Segoe UI", dynamic_font, "bold"), justify="center")
+                            self.canvas.create_text(center_scr_x, center_scr_y, text=display_text, fill="#FFFFFF", font=("Segoe UI", dynamic_font, "bold"), justify="center")
