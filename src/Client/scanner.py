@@ -168,7 +168,9 @@ class ScannerNode:
                                     if emp_name:
                                         if self.user == emp_name:
                                             winsound.MessageBeep(winsound.MB_ICONASTERISK)
-                                            self.message_queue.put(f"Session Active:\nYou are already logged in as {emp_name}.")
+                                            if current_time - getattr(self, 'last_same_user_scan', 0) > 5.0:
+                                                self.message_queue.put(f"You are already logged in as:\n{emp_name}.")
+                                                self.last_same_user_scan = current_time
                                         elif self.user and self.user != emp_name:
                                             winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
                                             self.message_queue.put(f"COMMAND:CONFIRM_RELOG:{emp_name}")

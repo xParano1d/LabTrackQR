@@ -67,16 +67,58 @@ class NotificationManager:
         border_color = ctk.ThemeManager.theme["CTkFrame"]["border_color"][mode]
         return bg_color, border_color
 
-    def center_window(self, window, width, height):
+    def center_window(self, window, width, height, animate=True):
         window.update_idletasks()
-        
         screen_w = window.winfo_screenwidth()
         screen_h = window.winfo_screenheight()
         
         x = int((screen_w / 2) - (width / 2))
-        y = int((screen_h / 2) - (height / 2))
+        target_y = int((screen_h / 2) - (height / 2))
         
-        window.geometry(f"{width}x{height}+{x}+{y}")
+        # --- MONKEY PATCH: Hijack the destroy method to animate the exit ---
+        original_destroy = window.destroy
+        def animated_destroy():
+            if not window.winfo_exists(): return
+            if getattr(window, 'is_closing_animated', False): return # Prevent double-trigger stutter!
+            window.is_closing_animated = True
+            
+            def slide_out(current_y, alpha):
+                if not window.winfo_exists(): return
+                current_y += ((target_y + 40) - current_y) * 0.35 # Ease down
+                alpha = max(0.0, alpha - 0.15)
+                window.geometry(f"{width}x{height}+{x}+{int(current_y)}")
+                window.attributes("-alpha", alpha)
+                if alpha > 0.05:
+                    window.after(16, lambda: slide_out(current_y, alpha))
+                else:
+                    original_destroy()
+            slide_out(window.winfo_y(), 1.0)
+            
+        window.destroy = animated_destroy
+
+        if not animate:
+            window.geometry(f"{width}x{height}+{x}+{target_y}")
+            return
+            
+        # --- SLIDE IN ANIMATION ---
+        start_y = target_y - 40
+        window.geometry(f"{width}x{height}+{x}+{start_y}")
+        window.attributes("-alpha", 0.0)
+        
+        def slide_in(current_y, alpha):
+            if not window.winfo_exists(): return
+            if getattr(window, 'is_closing_animated', False): return # Prevent double-trigger stutter!
+            current_y += (target_y - current_y) * 0.35 # Ease in
+            alpha = min(1.0, alpha + 0.15)
+            window.geometry(f"{width}x{height}+{x}+{int(current_y)}")
+            window.attributes("-alpha", alpha)
+            if abs(current_y - target_y) > 1 or alpha < 1.0:
+                window.after(16, lambda: slide_in(current_y, alpha))
+            else:
+                window.geometry(f"{width}x{height}+{x}+{target_y}")
+                window.attributes("-alpha", 1.0)
+                
+        slide_in(start_y, 0.0)
 
     def _apply_window_theme(self, window):
         """Applies OS Taskbar icon, App Title Bar icon, and native header colors."""
@@ -167,6 +209,11 @@ class NotificationManager:
                 clean_msg = msg.strip()
                 if clean_msg:
                     self.spawn_notification(clean_msg)
+                    
+                    # --- THE FIX: Auto-close the Employee Directory upon any login event ---
+                    if any(trigger in clean_msg for trigger in ["Login Successful", "Session Active", "Temp Login"]):
+                        if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
+                            self.emp_dir_win.destroy()
 
         self.root.after(50, self.check_queue)
 
@@ -305,7 +352,7 @@ class NotificationManager:
         populate_list(tier_var.get())
         ctk.CTkButton(win, text="Close", command=win.destroy, fg_color="#555555", hover_color="#777777").pack(pady=15)
 
-        win.after(250, lambda: [self._apply_window_theme(win), win.deiconify(), win.lift(), win.focus_force()])
+        win.after(10, lambda: [self._apply_window_theme(win), win.deiconify(), win.lift(), win.focus_force()])
 
     def open_user_manager(self):
         if hasattr(self, 'user_mgr_win') and self.user_mgr_win and self.user_mgr_win.winfo_exists():
@@ -494,7 +541,7 @@ class NotificationManager:
 
         load_data()
 
-        win.after(250, lambda: [self._apply_window_theme(win), win.deiconify(), win.lift(), win.focus_force()])
+        win.after(10, lambda: [self._apply_window_theme(win), win.deiconify(), win.lift(), win.focus_force()])
 
     def spawn_notification(self, text):
         window = tk.Toplevel(self.root)
@@ -592,7 +639,8 @@ class NotificationManager:
         ctk.CTkLabel(inner_text, text=lines[0], text_color=theme_color, font=("Segoe UI", 14, "bold"), anchor="w", justify="left").pack(fill=tk.X)
         
         if len(lines) >= 2:
-            ctk.CTkLabel(inner_text, text=lines[1], text_color=text_primary, font=("Segoe UI", 16, "bold"), anchor="w", justify="left").pack(fill=tk.X)
+            # Added wraplength to force multiline if names exceed the window width
+            ctk.CTkLabel(inner_text, text=lines[1], text_color=text_primary, font=("Segoe UI", 16, "bold"), anchor="w", justify="left", wraplength=380).pack(fill=tk.X)
         if len(lines) == 3:
             ctk.CTkLabel(inner_text, text=lines[2], text_color=text_secondary, font=("Segoe UI", 12, "italic"), anchor="w", justify="left").pack(fill=tk.X)
         

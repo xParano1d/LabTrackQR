@@ -8,6 +8,8 @@ import shutil
 import ctypes
 import winreg
 import textwrap
+from config import BASE_PATH
+from PIL import ImageChops
 from datetime import datetime
 from PIL import Image, ImageTk, ImageFont, ImageDraw, ImageFilter
 
@@ -97,7 +99,6 @@ class MapViewerWindow:
         r"""Safely copies map.png and map.json from the Server to LocalAppData, with silent offline fallback."""
         try:
             sys.path.append(os.path.join(os.path.dirname(__file__)))
-            from config import BASE_PATH
             network_dir = os.path.join(BASE_PATH, "laboratory_map")
         except Exception:
             network_dir = r"Z:\Sample Tracking Tool\laboratory_map"
@@ -227,15 +228,15 @@ class MapViewerWindow:
         self.gradient_canvas = tk.Canvas(self.legend_frame, width=200, height=35, bg=panel_bg, highlightthickness=0)
         self.gradient_canvas.pack(padx=10, pady=(0, 5))
         
-        # Draw 8-Stop Meteorological Gradient
+        # Draw 7-Stop Meteorological Gradient (Ending in Pure Bright Red)
         def interpolate(color1, color2, t):
             return tuple(int(c1 + (c2 - c1) * t) for c1, c2 in zip(color1, color2))
             
-        stops = [(20, 20, 80), (30, 100, 200), (0, 255, 255), (0, 255, 0), (255, 255, 0), (255, 128, 0), (255, 0, 0), (139, 0, 0)]
+        stops = [(20, 20, 80), (30, 100, 200), (0, 255, 255), (0, 255, 0), (255, 255, 0), (255, 128, 0), (255, 0, 0)]
         for i in range(200):
             t = i / 199.0
-            idx = min(6, int(t * 7))
-            t_local = (t - (idx / 7.0)) * 7.0
+            idx = min(5, int(t * 6))
+            t_local = (t - (idx / 6.0)) * 6.0
             r, g, b = interpolate(stops[idx], stops[idx+1], t_local)
             self.gradient_canvas.create_line(i, 0, i, 15, fill=f"#{r:02x}{g:02x}{b:02x}")
             
@@ -580,85 +581,83 @@ class MapViewerWindow:
 
     def _build_heatmap_image(self):
         if not self.original_image: return
-        
-        mapped_counts = [len(self.inventory_map.get(zone['name'].lower(), [])) for zone in self.zones]
-        max_items = max(mapped_counts + [1])
-        
+
+        # --- density from mapped locations ---
+        counts = {z['name']: len(self.inventory_map.get(z['name'].lower(), [])) for z in self.zones}
+        max_items = max(list(counts.values()) + [1])
+
+        GAMMA = 0.4  # sqrt scaling, like your reference image (makes low counts visible)
+
         if hasattr(self, 'gradient_canvas'):
-            mid_val = max_items // 2 if max_items > 2 else 1
+            # with sqrt scaling, the middle of the colour bar corresponds to max * 0.5^2
+            mid_val = max(1, round(max_items * (0.5 ** (1 / GAMMA))))
             self.gradient_canvas.itemconfig(self.legend_min, text="0")
             self.gradient_canvas.itemconfig(self.legend_mid, text=str(mid_val))
             self.gradient_canvas.itemconfig(self.legend_max, text=str(max_items))
-        
+
         scale = 0.5
         w, h = int(self.original_image.width * scale), int(self.original_image.height * scale)
-        
-        # 1. Cover the entire window with a professional dark navy-blue meteorological base tint
-        base_overlay = Image.new('RGBA', (w, h), (15, 20, 45, 210))
-        
-        blob_layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(blob_layer)
-        
-        # Exact 8-Stop Meteorological Palette: Dark Blue -> Light Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> Dark Red
-        palette = [
-            (20, 20, 60, 0),        # 0.00: Transparent (0 items)
-            (30, 90, 180, 180),     # 0.15: Dark Blue (1 item)
-            (0, 200, 220, 200),     # 0.30: Light Blue / Cyan
-            (0, 220, 80, 220),      # 0.45: Green
-            (220, 220, 0, 230),     # 0.60: Yellow
-            (240, 130, 0, 240),     # 0.75: Orange
-            (230, 30, 30, 250),     # 0.90: Red
-            (140, 0, 0, 255)        # 1.00: Dark Red (Max items)
-        ]
-        
-        def get_palette_color(t):
-            t = max(0.0, min(1.0, t))
-            idx = t * (len(palette) - 1)
-            i = int(idx)
-            frac = idx - i
-            if i >= len(palette) - 1:
-                return palette[-1]
-            c1, c2 = palette[i], palette[i+1]
-            return tuple(int(c1[j] + (c2[j] - c1[j]) * frac) for j in range(4))
 
-        for zone in self.zones:
-            item_count = len(self.inventory_map.get(zone['name'].lower(), []))
-            
-            # 0 items = Zero blob drawn. It stays pure dark navy blue!
-            if item_count == 0: continue
-            
-            # Use a square-root curve (KDE standard) so even 1 item pops nicely against 7 items
-            density = min(1.0, (item_count / max_items) ** 0.75)
-            color = get_palette_color(density)
-            
-            min_x = min(x for x, y in zone['vertices'])
-            max_x = max(x for x, y in zone['vertices'])
-            min_y = min(y for x, y in zone['vertices'])
-            max_y = max(y for x, y in zone['vertices'])
-            
-            room_w = (max_x - min_x) * scale
-            room_h = (max_y - min_y) * scale
-            
-            # Strictly constrain radius to the room's bounds so it never overlaps walls or adjacent rooms
-            radius = max(12, min(room_w, room_h) * 0.38)
-            
-            # Use the precise custom label coordinate defined in the Map Creator
+        # --- two intensity layers: soft halo + tighter core ---
+        halo = Image.new('L', (w, h), 0)
+        core = Image.new('L', (w, h), 0)
+        d_halo, d_core = ImageDraw.Draw(halo), ImageDraw.Draw(core)
+
+        def shrunk(zone, cx, cy, f):
+            return [((cx + (x - cx) * f) * scale, (cy + (y - cy) * f) * scale)
+                    for x, y in zone['vertices']]
+
+        # draw cold zones first so hot zones are never overwritten by them
+        for zone in sorted(self.zones, key=lambda z: counts[z['name']]):
+            n = counts[zone['name']]
+            if n == 0:
+                continue
+            inten = int(((n / max_items) ** GAMMA) * 255)
+
+            xs = [x for x, _ in zone['vertices']]; ys = [y for _, y in zone['vertices']]
             if 'label' in zone:
-                cx, cy = zone['label']['x'] * scale, zone['label']['y'] * scale
+                cx, cy = zone['label']['x'], zone['label']['y']
             else:
-                cx, cy = (min_x + max_x) * 0.5 * scale, (min_y + max_y) * 0.5 * scale
-            
-            # Draw sharp core hot spot
-            draw.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), fill=color)
-            
-        # 2. Gentle blur to create seamless, high-end meteorological thermal contours
-        blob_layer = blob_layer.filter(ImageFilter.GaussianBlur(radius=6))
-        
-        # 3. Fuse seamlessly over the dark blue base map
-        final_overlay = Image.alpha_composite(base_overlay, blob_layer)
-        
-        # 4. Upscale back to high-res display
-        overlay_full = final_overlay.resize(self.original_image.size, Image.Resampling.BICUBIC)
+                cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+
+            d_halo.polygon(shrunk(zone, cx, cy, 1.10), fill=int(inten * 0.55))
+            d_core.polygon(shrunk(zone, cx, cy, 0.92), fill=inten)
+
+        halo = halo.filter(ImageFilter.GaussianBlur(radius=18))
+        core = core.filter(ImageFilter.GaussianBlur(radius=6.6))
+
+        # 'lighter' = per-pixel max, so neighbouring zones don't add up into fake hot spots
+        heat = ImageChops.lighter(halo, core)
+
+        # blur lowers the peak; stretch so the hottest spot is really "max" (red)
+        peak = heat.getextrema()[1]
+        if peak == 0:
+            self.heatmap_image = self.original_image.copy()
+            return
+        heat = heat.point(lambda v: min(255, int(v * 255 / peak)))
+
+        # --- colour lookup from your 7-stop legend ---
+        stops = [(20, 20, 80), (30, 100, 200), (0, 255, 255), (0, 255, 0),
+                (255, 255, 0), (255, 128, 0), (255, 0, 0)]
+        lut_r, lut_g, lut_b = [], [], []
+        for i in range(256):
+            t = i / 255.0
+            idx = min(len(stops) - 2, int(t * (len(stops) - 1)))
+            tl = t * (len(stops) - 1) - idx
+            a, b = stops[idx], stops[idx + 1]
+            lut_r.append(int(a[0] + (b[0] - a[0]) * tl))
+            lut_g.append(int(a[1] + (b[1] - a[1]) * tl))
+            lut_b.append(int(a[2] + (b[2] - a[2]) * tl))
+
+        rgb = Image.merge('RGB', (heat.point(lut_r), heat.point(lut_g), heat.point(lut_b)))
+
+        # --- alpha follows intensity: empty = fully transparent, hot = strong ---
+        alpha = heat.point(lambda v: min(215, int(v * 5)))  # fades in quickly, caps at ~85%
+        alpha = alpha.filter(ImageFilter.GaussianBlur(radius=2))
+        overlay = rgb.convert('RGBA')
+        overlay.putalpha(alpha)
+
+        overlay_full = overlay.resize(self.original_image.size, Image.Resampling.BICUBIC)
         self.heatmap_image = Image.alpha_composite(self.original_image.copy(), overlay_full)
 
     def _refresh_image_cache(self):

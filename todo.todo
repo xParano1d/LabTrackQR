@@ -21,11 +21,9 @@
 ✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
 ✔ dark/white theme switch (make sure icons and top bar colors are correct) @today @done (9/21/2026, 11:50:09 PM)
 ✔ animate popups appearing and dissapearing on screen smoothly @low @done (9/24/2026, 11:32:35 AM)
-☐ animate blinking for error and action reqiured popups @low
-☐ animate shaking init sample window when wrong data has been entered @low 
-☐ animate windows slide in/out when opened/closed @low
-☐ fix user not logged in scanner not connected but logviewer pulls user login from ad for some reason @critical 
-☐ user is still able to initialize sample that already is in the system @critical prevention needed!
+✔ animate blinking for error and action reqiured popups @low @done (9/28/2026, 10:17:06 PM)
+✔ animate shaking init sample window when wrong data has been entered @low @done (9/28/2026, 10:37:48 PM)
+✔ animate windows slide in/out when opened/closed @low @done (9/28/2026, 10:37:50 PM)
 ✔ prevent ctrl+c notification spam when keys are held down @high @done (9/24/2026, 11:33:18 AM)
 ✔ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) ??? @today @done (9/17/2026, 2:55:49 PM)
 ✔ close manage employee badges after successfull relogin @low @done (9/18/2026, 12:13:56 PM)
@@ -66,7 +64,7 @@ tkinter to cutom tkinter elements changes:
 ✔ fix a bug with open in external editor polish characters displayed wrong @done (9/15/2026, 9:03:31 AM)
 ✔ change naming a bit (Pending-Storage -> verification queue | action removed -> request closed) @done (9/15/2026, 9:30:26 AM)
 ✔ fix autorefresh (sometimes i feel like it does't even exist with current logic) @done (9/24/2026, 10:07:46 AM)
-☐ close app confirmation 
+✔ close app confirmation @low @done (9/28/2026, 11:41:44 PM)
 ✔ log viewer bring newest instance to top clicking 3rd time in tray @done (9/15/2026, 10:20:57 AM)
 ✘ About Tab for licenses and used things in app??????? @low @cancelled (9/22/2026, 11:38:59 AM)
 ✔ SERVER AND CLIENT SEPARATION @today @done (9/3/2026, 3:54:06 PM)

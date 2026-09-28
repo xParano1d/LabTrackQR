@@ -493,10 +493,16 @@ class LogViewerWindow:
 
     def _build_archive_menu_async(self):
         available_history = self.fetch_archive_months() 
-        self.viewer.after(0, lambda: self._render_archive_menu(available_history))
+        if hasattr(self, 'viewer') and self.viewer.winfo_exists():
+            self.viewer.after(0, lambda: self._render_archive_menu(available_history))
         
     def _render_archive_menu(self, available_history):
-        self.main_menu.delete(0, tk.END)
+        if not hasattr(self, 'viewer') or not self.viewer.winfo_exists(): return
+        try:
+            self.main_menu.delete(0, tk.END)
+        except Exception:
+            return
+            
         history_tree = {}
         for ym in available_history:
             y, m = ym.split('-')

@@ -113,9 +113,35 @@ def setup_tray(root, api_server):
         set_autostart(state['autostart'])
 
     def on_quit(icon, item):
-        icon.stop()
-        root.quit()
-        os._exit(0)
+        def show_quit_prompt():
+            prompt = tk.Toplevel(root)
+            prompt.overrideredirect(True)
+            
+            is_dark = ctk.get_appearance_mode() == "Dark"
+            bg_color = ctk.ThemeManager.theme["CTk"]["fg_color"][1 if is_dark else 0]
+            
+            prompt.configure(bg=bg_color, highlightthickness=3, highlightbackground="#d9534f", highlightcolor="#d9534f")
+            prompt.attributes("-topmost", True)
+            
+            prompt.update_idletasks()
+            w, h = 320, 140
+            x = int((prompt.winfo_screenwidth() / 2) - (w / 2))
+            y = int((prompt.winfo_screenheight() / 2) - (h / 2))
+            prompt.geometry(f"{w}x{h}+{x}+{y}")
+            
+            ctk.CTkLabel(prompt, text="Quit LabTrack Server?", text_color="#d9534f", font=("Segoe UI", 16, "bold")).pack(pady=(15, 5))
+            ctk.CTkLabel(prompt, text="Are you sure you want to exit?", font=("Segoe UI", 12)).pack(pady=(0, 15))
+            
+            def confirm():
+                icon.stop()
+                os._exit(0)
+                
+            btn_frame = ctk.CTkFrame(prompt, fg_color="transparent")
+            btn_frame.pack()
+            ctk.CTkButton(btn_frame, text="Quit", command=confirm, fg_color="#d9534f", hover_color="#c9302c", font=("Segoe UI", 12, "bold"), width=90).pack(side=tk.LEFT, padx=10)
+            ctk.CTkButton(btn_frame, text="Cancel", command=prompt.destroy, fg_color="#555555", hover_color="#777777", font=("Segoe UI", 12, "bold"), width=90).pack(side=tk.LEFT, padx=10)
+
+        root.after(0, show_quit_prompt)
             
     menu = pystray.Menu(
         pystray.MenuItem("View Logs and History", trigger_log_viewer), 

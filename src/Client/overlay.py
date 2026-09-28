@@ -1,4 +1,6 @@
 # overlay.py (CLIENT VERSION)
+import json
+
 import customtkinter as ctk
 ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True
 
@@ -94,16 +96,60 @@ class NotificationManager:
         border_color = ctk.ThemeManager.theme["CTkFrame"]["border_color"][mode]
         return bg_color, border_color
 
-    def center_window(self, window, width, height):
+    def center_window(self, window, width, height, animate=True):
         window.update_idletasks()
-        
         screen_w = window.winfo_screenwidth()
         screen_h = window.winfo_screenheight()
         
         x = int((screen_w / 2) - (width / 2))
-        y = int((screen_h / 2) - (height / 2))
+        target_y = int((screen_h / 2) - (height / 2))
         
-        window.geometry(f"{width}x{height}+{x}+{y}")
+        # --- MONKEY PATCH: Hijack the destroy method to animate the exit ---
+        original_destroy = window.destroy
+        def animated_destroy():
+            if not window.winfo_exists(): return
+            if getattr(window, 'is_closing_animated', False): return # Prevent double-trigger stutter!
+            window.is_closing_animated = True
+            
+            def slide_out(current_y, alpha):
+                if not window.winfo_exists(): return
+                current_y += ((target_y + 40) - current_y) * 0.35 # Ease down
+                alpha = max(0.0, alpha - 0.15)
+                window.geometry(f"{width}x{height}+{x}+{int(current_y)}")
+                window.attributes("-alpha", alpha)
+                if alpha > 0.05:
+                    window.after(16, lambda: slide_out(current_y, alpha))
+                else:
+                    original_destroy()
+            slide_out(window.winfo_y(), 1.0)
+            
+        window.destroy = animated_destroy
+
+        if not animate:
+            window.geometry(f"{width}x{height}+{x}+{target_y}")
+            return
+            
+        # --- SLIDE IN ANIMATION ---
+        start_y = target_y - 40
+        window.geometry(f"{width}x{height}+{x}+{start_y}")
+        window.attributes("-alpha", 0.0)
+        
+        def slide_in(current_y, alpha):
+            if not window.winfo_exists(): return
+            # THE FIX: Instantly kill the entrance animation if the window is ordered to close!
+            if getattr(window, 'is_closing_animated', False): return 
+            
+            current_y += (target_y - current_y) * 0.35 # Ease in
+            alpha = min(1.0, alpha + 0.15)
+            window.geometry(f"{width}x{height}+{x}+{int(current_y)}")
+            window.attributes("-alpha", alpha)
+            if abs(current_y - target_y) > 1 or alpha < 1.0:
+                window.after(16, lambda: slide_in(current_y, alpha))
+            else:
+                window.geometry(f"{width}x{height}+{x}+{target_y}")
+                window.attributes("-alpha", 1.0)
+                
+        slide_in(start_y, 0.0)
 
     def send_heartbeat(self):
         if self.storage:
@@ -165,7 +211,7 @@ class NotificationManager:
 
         tk.Label(splash, text="LabTrackQR", bg=bg_color, fg=text_color, font=("Segoe UI", 26, "bold")).pack(pady=(5,0))
         tk.Label(splash, text="Connecting to hardware & network...", bg=bg_color, fg=sub_text_color, font=("Segoe UI", 11, "italic")).pack()
-        splash.after(2500, splash.destroy)
+        splash.after(3000, splash.destroy)
 
     def check_queue(self):
         # LIVE SESSION AWARENESS
@@ -323,6 +369,18 @@ class NotificationManager:
         
         self.center_window(popup, 420, 180)
         popup.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        # --- CONTINUOUS SLOW BLINKING ANIMATION ---
+        def blink_border(is_red=False):
+            if not popup.winfo_exists(): return
+            
+            color = "#d9534f" if is_red else "#ffffff"
+            popup.configure(highlightbackground=color)
+            
+            # Loop endlessly every 650ms (0.65 seconds)
+            popup.after(650, lambda: blink_border(not is_red))
+        
+        blink_border(True) # Start on red
         
         ctk.CTkLabel(popup, text="Action Required", text_color="#d9534f", font=("Segoe UI", 18, "bold")).pack(pady=(25, 5))
         ctk.CTkLabel(popup, text=f"You currently have {count} samples left unattended\nin the system for over 14 days.", font=("Segoe UI", 13)).pack(pady=10)
@@ -384,9 +442,6 @@ class NotificationManager:
             if is_temp_now: self.spawn_notification(f"Temp Login Active:\nWelcome {new_user}!\n(5m idle timer running)")
             else: self.spawn_notification(f"Login Successful:\nWelcome {new_user}!")
             win.destroy()
-            
-            if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
-                self.emp_dir_win.destroy()
 
         def cancel():
             if win.winfo_exists():
@@ -502,7 +557,14 @@ class NotificationManager:
         sel_frame = ctk.CTkFrame(manager, fg_color="transparent")
         sel_frame.pack(fill=tk.X, padx=40, pady=5)
         
-        emp_dict = self.storage.get_employees() if self.storage else {}
+        # Load instantly from the background cache to prevent UI freezing
+        emp_dict = {}
+        if self.storage:
+            with self.storage.lock:
+                try:
+                    with open(self.storage.emp_cache_file, 'r') as f: emp_dict = json.load(f)
+                except Exception: pass
+                
         display_list = []
         for b_id, data in emp_dict.items():
             name_str = data.get("full_name", "Unknown") if isinstance(data, dict) else data
@@ -597,6 +659,18 @@ class NotificationManager:
         win.attributes("-topmost", True)
 
         self.center_window(win, 400, 250)
+        
+        # --- CONTINUOUS SLOW BLINKING ANIMATION ---
+        def blink_border(is_red=False):
+            if not win.winfo_exists(): return
+            
+            color = "#d9534f" if is_red else "#ffffff"
+            win.configure(highlightbackground=color)
+            
+            # Loop endlessly every 650ms
+            win.after(650, lambda: blink_border(not is_red))
+            
+        blink_border(True)
 
         ctk.CTkLabel(win, text="WARNING", text_color="#d9534f", font=("Segoe UI", 18, "bold")).pack(pady=(15, 2))
         ctk.CTkLabel(win, text="Do you want to PERNAMENTLY Remove:", font=("Segoe UI", 13)).pack()
@@ -708,6 +782,29 @@ class NotificationManager:
         entry_proj.bind("<Key>", reset_bg)
         combo_dept.bind("<Key>", reset_bg)
 
+        # --- SHAKE ANIMATION ---
+        def trigger_shake():
+            # Prevent mashing the button while it's already shaking
+            if getattr(form, 'is_shaking', False): return
+            form.is_shaking = True
+            
+            orig_x = form.winfo_x()
+            orig_y = form.winfo_y()
+            
+            # The exact pixel offsets to create a snappy left/right shake that decays
+            offsets = [12, -12, 10, -10, 6, -6, 3, -3, 0]
+            
+            def shake_step(step=0):
+                if not form.winfo_exists(): return
+                if step >= len(offsets):
+                    form.is_shaking = False
+                    return
+                # Instantly move the window horizontally
+                form.geometry(f"+{orig_x + offsets[step]}+{orig_y}")
+                form.after(35, lambda: shake_step(step + 1))
+                
+            shake_step()
+
         def save_manual_entry():
             id_raw = entry_id.get().strip()
             req_val = entry_req.get().strip().replace('\n', ' ').replace('\r', '')
@@ -729,6 +826,9 @@ class NotificationManager:
                     )
                 form.destroy()
             else:
+                trigger_shake()
+                winsound.MessageBeep(winsound.MB_ICONHAND)
+                
                 err_color = ["#ffcccc", "#662222"]
                 if not id_raw: entry_id.configure(fg_color=err_color)
                 if not req_val: entry_req.configure(fg_color=err_color)
@@ -755,6 +855,13 @@ class NotificationManager:
 
         # 1. Semantic Analysis for Colors and Icons
         text_lower = text.lower()
+        
+        # --- BULLETPROOF AUTO-CLOSE ---
+        # Instantly close the Badges window any time a login notification is drawn on screen
+        if any(t in text_lower for t in ["login successful", "session active", "temp login"]):
+            if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
+                self.emp_dir_win.destroy()
+
         if "temp login active" in text_lower:
             theme_color = ["#f39c12", "#f39c12"] 
             icon_name = "user-clock"
