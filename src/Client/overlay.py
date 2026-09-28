@@ -767,9 +767,6 @@ class NotificationManager:
         elif "copied" in text_lower:
             theme_color = theme_accent 
             icon_name = "copy"
-        elif "queued" in text_lower:
-            theme_color = theme_accent 
-            icon_name = "flask"
         elif"location set" in text_lower:
             theme_color = theme_accent 
             icon_name = "location-dot"
@@ -785,6 +782,9 @@ class NotificationManager:
             icon_name = "warning"
             theme_color = ["#d9534f", "#d9534f"] 
             icon_name = "trash-can"
+        elif "queued" in text_lower:
+            theme_color = theme_accent 
+            icon_name = "flask"
         elif any(w in text_lower for w in ["denied", "failed", "lost", "error"]):
             theme_color = ["#d9534f", "#d9534f"] 
             icon_name = "warning"

@@ -16,7 +16,7 @@
 ✘ "Analitics" tab inside [View Logs] with some nice matplotlib visual charts ??? idk @low #inFuture maybe @cancelled (9/18/2026, 10:35:29 AM)
 ✔ storage map config creator for server and as standalone .exe @done (9/25/2026, 1:27:21 PM)
 ✔ storage map viewer like visualization of storage and where things are etc. @critical @today @done (9/25/2026, 4:12:24 PM)
-☐ re-design tray option menu for better visibility and decluttering @high
+✘ re-design tray option menu for better visibility and decluttering @high @cancelled (9/28/2026, 3:29:13 PM)
 ✔ offline history synchronization @critical @done (9/3/2026, 3:54:22 PM)
 ✔ design theme for CustomTkinter using ctk-theme-builder (https://github.com/avalon60/ctk_theme_builder) @done (9/16/2026, 1:25:38 PM)
 ✔ dark/white theme switch (make sure icons and top bar colors are correct) @today @done (9/21/2026, 11:50:09 PM)
@@ -24,6 +24,8 @@
 ☐ animate blinking for error and action reqiured popups @low
 ☐ animate shaking init sample window when wrong data has been entered @low 
 ☐ animate windows slide in/out when opened/closed @low
+☐ fix user not logged in scanner not connected but logviewer pulls user login from ad for some reason @critical 
+☐ user is still able to initialize sample that already is in the system @critical prevention needed!
 ✔ prevent ctrl+c notification spam when keys are held down @high @done (9/24/2026, 11:33:18 AM)
 ✔ migration from Tkinter to CustomTkinter (https://customtkinter.tomschimansky.com/) ??? @today @done (9/17/2026, 2:55:49 PM)
 ✔ close manage employee badges after successfull relogin @low @done (9/18/2026, 12:13:56 PM)
