@@ -8,7 +8,6 @@ import shutil
 import ctypes
 import winreg
 import textwrap
-from config import BASE_PATH
 from PIL import ImageChops
 from datetime import datetime
 from PIL import Image, ImageTk, ImageFont, ImageDraw, ImageFilter
@@ -96,12 +95,18 @@ class MapViewerWindow:
         self.viewer.after(100, self._load_local_map)
 
     def _sync_network_map(self):
-        r"""Safely copies map.png and map.json from the Server to LocalAppData, with silent offline fallback."""
+        r"""Safely copies map.png and map.json from the Master Directory to LocalAppData, with silent offline fallback."""
+        network_dir = r"Z:\Sample Tracking Tool\laboratory_map"
         try:
-            sys.path.append(os.path.join(os.path.dirname(__file__)))
-            network_dir = os.path.join(BASE_PATH, "laboratory_map")
+            settings_path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'server_settings.json')
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    data = json.load(f)
+                    saved_path = data.get("PARENT_FOLDER")
+                    if saved_path and os.path.exists(saved_path):
+                        network_dir = os.path.join(saved_path, "laboratory_map")
         except Exception:
-            network_dir = r"Z:\Sample Tracking Tool\laboratory_map"
+            pass
             
         # 1. Check if we already have a working offline cache on the hard drive
         has_cache = (os.path.exists(os.path.join(self.local_map_dir, "map.json")) and 
@@ -363,15 +368,15 @@ class MapViewerWindow:
             
             if "verification" in found_loc or "pending" in found_loc:
                 self.open_bottom_sheet("verification queue")
-                self.notify(f"Item '{target.upper()}' found\nin Verification Queue.")
+                self.notify(f"Found in Verification Queue:\n{target.upper()}")
                 self.search_var.set("")
                 return
             
             self.open_bottom_sheet("OTHER")
-            self.notify(f"Item '{target.upper()}' found\nin Unmapped Locations.")
+            self.notify(f"Found in Unmapped Locations:\n{target.upper()}")
             self.search_var.set("")
         else:
-            self.notify(f"Search term '{target}'\nnot found in active inventory.")
+            self.notify(f"Not found in active inventory:\n{target}")
             
     def _flash_zone(self, index, flashes):
         if flashes <= 0:

@@ -13,8 +13,9 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 class LabTrackAPI:
-    def __init__(self, storage_manager):
+    def __init__(self, storage_manager, settings):
         self.storage = storage_manager
+        self.settings = settings
         self.app = Flask(__name__)
 
         self.view_cache = {}
@@ -174,7 +175,8 @@ class LabTrackAPI:
             else:
                 results.sort(key=lambda x: x[col_idx].lower() if len(x)>col_idx else "", reverse=is_reverse)
 
-            final_results = results[:1500]
+            limit = self.settings.get("DATA_PAGINATION_LIMIT", 1500)
+            final_results = results[:limit]
 
             with self.cache_lock:
                 self.view_cache[cache_key] = {"mtime": current_mtime, "data": final_results}
@@ -188,7 +190,7 @@ class LabTrackAPI:
                 return jsonify({"results": [], "warning": ""})
 
             search_terms = [word.lower() for word in query.split()]
-            max_results = 1000
+            max_results = self.settings.get("SEARCH_MAX_RESULTS", 1000)
             results = []
             
             settings_path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'server_settings.json')
@@ -226,16 +228,18 @@ class LabTrackAPI:
                 return local_results
 
             warning_msg = ""
-            with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+            workers = self.settings.get("SEARCH_THREAD_WORKERS", 16)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
                 for file_results in executor.map(search_file, files_to_search):
                     results.extend(file_results)
                     if len(results) >= max_results:
                         results = results[:max_results]
-                        warning_msg = "ÔÜá´ŞĆ Displaying first 1,000 results.\nPlease use more specific search terms."
+                        warning_msg = f"⚠️ Displaying first {max_results} results.\nPlease use more specific search terms."
                         executor.shutdown(wait=False, cancel_futures=True) 
                         break
 
             return jsonify({"results": results, "warning": warning_msg})
+
 
     def start_server(self, host='0.0.0.0', port=5000):
         server_thread = threading.Thread(target=self.app.run, kwargs={'host': host, 'port': port, 'debug': False, 'use_reloader': False})

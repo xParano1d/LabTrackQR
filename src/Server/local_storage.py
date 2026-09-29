@@ -9,19 +9,14 @@ from datetime import datetime
 import threading
 
 class CsvStorage:
-    def __init__(self, inventory_file, employees_file, history_dir, sync_path=None, sync_interval=300):
+    def __init__(self, inventory_file, employees_file, history_dir):
         self.inventory_file = inventory_file
         self.employees_file = employees_file
         self.history_dir = history_dir
-        self.sync_path = sync_path
-        self.sync_interval = sync_interval
 
         self.recent_scans = {} 
         self.lock = threading.Lock()
         self._ensure_files_exist()
-        
-        if self.sync_path:
-            threading.Thread(target=self._network_sync_loop, daemon=True).start()
 
         self.local_backup_dir = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'backups')
         os.makedirs(os.path.join(self.local_backup_dir, 'recent'), exist_ok=True)
@@ -131,7 +126,6 @@ class CsvStorage:
                             time.sleep(0.05) 
                             
                 self.last_valid_row_count = 0 
-                self._trigger_immediate_sync()
                 return True
             except Exception: return False
 
@@ -217,10 +211,6 @@ class CsvStorage:
                 f.write(raw_text)
                 
         return list(csv.reader(io.StringIO(raw_text), delimiter=';'))
-    
-    def is_server_available(self):
-        if not self.sync_path: return False
-        return os.path.exists(self.sync_path)
 
     def get_active_file_path(self, file_type, year=None, month=None):
         if file_type == 'inventory':
@@ -235,18 +225,6 @@ class CsvStorage:
                 target_month = now.strftime("%m")
                 
             return os.path.join(self.history_dir, target_year, f"log_{target_month}.csv")
-
-    def _trigger_immediate_sync(self):
-        if self.sync_path: threading.Thread(target=self._perform_sync, daemon=True).start()
-
-    def _perform_sync(self):
-        if self.is_server_available():
-            try:
-                os.makedirs(self.sync_path, exist_ok=True)
-                shutil.copy(self.inventory_file, os.path.join(self.sync_path, "inventory.csv"))
-                if os.path.exists(self.employees_file): shutil.copy(self.employees_file, os.path.join(self.sync_path, "employees.json"))
-                shutil.copytree(self.history_dir, os.path.join(self.sync_path, "history_logs"), dirs_exist_ok=True)
-            except Exception: pass 
 
     def _log_to_history(self, location, sample_id, requestor, dept, project, user):
         now = datetime.now()
@@ -308,7 +286,6 @@ class CsvStorage:
                 json.dump(emps, f, indent=4)
                 
             self._log_to_history("SYSTEM: REGISTRATION", f"ID:{badge_id}", full_name, f"AD: {ad_username}", "SYSTEM LOG", "SYSTEM")
-        self._trigger_immediate_sync()
 
     def delete_employee(self, badge_id):
         with self.lock:
@@ -325,7 +302,6 @@ class CsvStorage:
                             json.dump(emps, f, indent=4)
                             
                         self._log_to_history("SYSTEM: DELETION", f"ID:{badge_id}", deleted_name, "Manually Deleted", "SYSTEM LOG", "SERVER ADMIN")
-                        self._trigger_immediate_sync()
                         return True
             except Exception: 
                 pass
@@ -410,7 +386,6 @@ class CsvStorage:
                 clean_loc = location_id.replace('LOC:', '').strip()
                 message_queue.put(f"Saved: {sample_id}\nLocation: {clean_loc}")
             
-        self._trigger_immediate_sync()
 
     def remove_data_async(self, sample_id, user, message_queue):
         threading.Thread(target=self._remove_data, args=(sample_id, user, message_queue), daemon=True).start()
@@ -441,7 +416,6 @@ class CsvStorage:
                 self._log_to_history("REQUEST CLOSED", sample_id, req, dept, proj, user)
             except Exception: pass
         if message_queue: message_queue.put(f"Removed: {sample_id}\nBy: {user}")
-        self._trigger_immediate_sync()
 
     def get_inventory_data(self):
         with self.lock:

@@ -226,7 +226,12 @@ class NotificationManager:
 
     def open_map_creator(self):
         try:
-            subprocess.Popen([sys.executable, "--creator"])
+            # If running from source code (.py), include the script name
+            if sys.argv[0].endswith('.py'):
+                subprocess.Popen([sys.executable, sys.argv[0], "--creator"])
+            # If compiled to an executable, just pass the flag
+            else:
+                subprocess.Popen([sys.executable, "--creator"])
         except Exception as e:
             self.spawn_notification(f"Error launching Creator:\n{e}")
 

@@ -363,15 +363,15 @@ class MapViewerWindow:
             
             if "verification" in found_loc or "pending" in found_loc:
                 self.open_bottom_sheet("verification queue")
-                self.notify(f"Item '{target.upper()}' found\nin Verification Queue.")
+                self.notify(f"Found in Verification Queue:\n{target.upper()}")
                 self.search_var.set("")
                 return
             
             self.open_bottom_sheet("OTHER")
-            self.notify(f"Item '{target.upper()}' found\nin Unmapped Locations.")
+            self.notify(f"Found in Unmapped Locations:\n{target.upper()}")
             self.search_var.set("")
         else:
-            self.notify(f"Search term '{target}'\nnot found in active inventory.")
+            self.notify(f"Not found in active inventory:\n{target}")
             
     def _flash_zone(self, index, flashes):
         if flashes <= 0:

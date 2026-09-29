@@ -14,7 +14,6 @@ import json
 import ctypes
 from PIL import Image
 from tkinter import filedialog, messagebox
-from config import NETWORK_SYNC_PATH, SYNC_INTERVAL_SECONDS
 from local_storage import CsvStorage
 from overlay import NotificationManager
 from server_api import LabTrackAPI
@@ -238,8 +237,20 @@ def get_master_directory():
         selected_path = path_var.get()
         if selected_path and os.path.exists(selected_path):
             os.makedirs(os.path.dirname(SETTINGS_FILE_PATH), exist_ok=True)
-            with open(SETTINGS_FILE_PATH, 'w') as f:
-                json.dump({"PARENT_FOLDER": selected_path}, f)
+            
+            # Master Configuration Generation with built-in JSON comments
+            default_settings = {
+                "PARENT_FOLDER": selected_path,
+                "__comment_SEARCH_MAX_RESULTS": "Maximum number of rows returned during a deep search to prevent RAM crashes. Default: 1000",
+                "SEARCH_MAX_RESULTS": 1000,
+                "__comment_SEARCH_THREAD_WORKERS": "How many CPU threads the search engine uses to scan archive files. Default: 16",
+                "SEARCH_THREAD_WORKERS": 16,
+                "__comment_DATA_PAGINATION_LIMIT": "Maximum number of rows the UI will load at once when viewing active/history logs. Default: 1500",
+                "DATA_PAGINATION_LIMIT": 1500
+            }
+            
+            with open(SETTINGS_FILE_PATH, 'w', encoding='utf-8') as f:
+                json.dump(default_settings, f, indent=4)
             setup_root.destroy()
         else:
             tk.messagebox.showwarning("Invalid Path", "Please select a valid directory to continue.", parent=setup_root)
@@ -287,15 +298,21 @@ if __name__ == "__main__":
 
     parent_folder = get_master_directory()
     
+    # --- LOAD SETTINGS FROM JSON ---
+    settings_path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'server_settings.json')
+    with open(settings_path, 'r', encoding='utf-8') as f:
+        server_settings = json.load(f)
+
+    
     save_path = os.path.join(parent_folder, "inventory.csv")
     employees_path = os.path.join(parent_folder, "employees.json")
     history_dir = os.path.join(parent_folder, "history_logs")
     map_dir = os.path.join(parent_folder, "laboratory_map")
     os.makedirs(map_dir, exist_ok=True)
     
-    storage = CsvStorage(save_path, employees_path, history_dir, NETWORK_SYNC_PATH, SYNC_INTERVAL_SECONDS)
+    storage = CsvStorage(save_path, employees_path, history_dir)
     
-    api_server = LabTrackAPI(storage)
+    api_server = LabTrackAPI(storage, server_settings)
     api_server.start_server(host='0.0.0.0', port=5000)
 
     app = NotificationManager(message_queue, storage, scanner_mgr=None)
