@@ -1,6 +1,6 @@
 # logviewer.py
 import customtkinter as ctk
-ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # THE MASTER FIX
+ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # Prevents multi-monitor DPI scaling artifacts
 
 import tkinter as tk
 from tkinter import ttk
@@ -15,6 +15,7 @@ import winreg
 import hashlib
 from PIL import Image
 from datetime import datetime
+from config import STALE_SAMPLE_DAYS, UI_AUTO_REFRESH_MS, API_TIMEOUT_LONG, API_TIMEOUT_SHORT, API_TIMEOUT_SEARCH
 
 def resource_path(file_name):
     try:
@@ -165,7 +166,7 @@ class LogViewerWindow:
         try:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
             url = f"{target_url}/api/get_archive_months"
-            resp = requests.get(url, timeout=5)
+            resp = requests.get(url, timeout=API_TIMEOUT_LONG)
             if resp.status_code == 200:
                 return resp.json().get("months", [])
         except Exception:
@@ -185,7 +186,7 @@ class LogViewerWindow:
                 "source": source, "year": year or "", "month": month or "",
                 "sort_col": sort_col, "reverse": str(reverse).lower()
             }
-            resp = requests.get(url, params=params, timeout=3)
+            resp = requests.get(url, params=params, timeout=API_TIMEOUT_SHORT)
             if resp.status_code == 200:
                 return resp.json().get("results", [])
         except Exception:
@@ -550,7 +551,7 @@ class LogViewerWindow:
             primary = str(item[0]).strip().lower()
             tie_breaker = str(item[1])
             
-            # --- THE FIX: Teach the sorter to read Polish dates ---
+            # Reformat DD-MM-YYYY to YYYY-MM-DD for chronological sorting
             if re.match(r"^\d{2}-\d{2}-\d{4}", primary):
                 primary = f"{primary[6:10]}-{primary[3:5]}-{primary[0:2]}" + primary[10:]
                 
@@ -600,7 +601,7 @@ class LogViewerWindow:
     def run_api_deep_search(self, query):
         try:
             target_url = getattr(self.storage, 'server_url', "http://127.0.0.1:5000")
-            response = requests.get(f"{target_url}/api/search", params={"q": query}, timeout=150)
+            response = requests.get(f"{target_url}/api/search", params={"q": query}, timeout=API_TIMEOUT_SEARCH)
             if response.status_code == 200:
                 data = response.json()
                 self.viewer.after(0, lambda: self.render_deep_search(data.get("results", []), data.get("warning", "")))
@@ -711,11 +712,9 @@ class LogViewerWindow:
             is_today = False
             is_closed = 'closed' in loc_lower or 'removed' in loc_lower
             
-            # Instead of looking for "14-day-old logs", the Old filter looks strictly at 
-            # the Active Inventory to find 14-day-old samples. Since closed items 
-            # are deleted from inventory, this is bulletproof!
+            # Calculate sample age against current date to flag overdue items
             if is_active_inventory and row_date:
-                if (now - row_date).days >= 14:
+                if (now - row_date).days >= STALE_SAMPLE_DAYS:
                     is_old = True
                     
             if row_date and row_date.date() == now.date():
@@ -767,7 +766,7 @@ class LogViewerWindow:
                 # Pass the year and month so the engine knows which file to check!
                 self.load_data(self.current_tab[0], full_query, is_auto_refresh=True, year=self.current_history_target[0], month=self.current_history_target[1])
 
-            self.viewer.after(1000, self.auto_refresh)
+            self.viewer.after(UI_AUTO_REFRESH_MS, self.auto_refresh)
 
     def copy_selection(self, event=None):
         selected = self.tree.selection()

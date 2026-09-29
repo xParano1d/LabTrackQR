@@ -275,7 +275,7 @@ class MapConfigurator(ctk.CTk):
         selected_indices = [i for i, z in enumerate(self.zones) if z.get('selected', False)]
         count = len(selected_indices)
         
-        # Gatekeeper: Bulletproof state check that forces immediate UI resolution
+        # Enforce immediate UI state updates
         def safe_state(btn, target_state):
             if btn.cget("state") != target_state:
                 btn.configure(state=target_state)

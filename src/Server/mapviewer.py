@@ -8,7 +8,6 @@ import shutil
 import ctypes
 import winreg
 import textwrap
-from config import BASE_PATH
 from PIL import ImageChops
 from datetime import datetime
 from PIL import Image, ImageTk, ImageFont, ImageDraw, ImageFilter
@@ -42,12 +41,17 @@ class MapViewerWindow:
         self.viewer = ctk.CTkToplevel(parent_root)
         self.viewer.title("Laboratory Storage Map")
         
-        width, height = 1400, 850
         self.viewer.update_idletasks()
         screen_w = self.viewer.winfo_screenwidth()
         screen_h = self.viewer.winfo_screenheight()
+        
+        # --- ADAPTIVE SIZING ---
+        # Takes up 85% of the screen, but caps at a maximum of 1400x850 for massive monitors
+        width = min(1400, int(screen_w * 0.85))
+        height = min(850, int(screen_h * 0.85))
+        
         x = int((screen_w / 2) - (width / 2))
-        y = int((screen_h / 2) - (height / 2))
+        y = int((screen_h / 2) - (height / 2) - 50)
         self.viewer.geometry(f"{width}x{height}+{x}+{y}")
         
         try:
@@ -96,12 +100,18 @@ class MapViewerWindow:
         self.viewer.after(100, self._load_local_map)
 
     def _sync_network_map(self):
-        r"""Safely copies map.png and map.json from the Server to LocalAppData, with silent offline fallback."""
+        r"""Safely copies map.png and map.json from the Master Directory to LocalAppData, with silent offline fallback."""
+        network_dir = r"Z:\Sample Tracking Tool\laboratory_map"
         try:
-            sys.path.append(os.path.join(os.path.dirname(__file__)))
-            network_dir = os.path.join(BASE_PATH, "laboratory_map")
+            settings_path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'LabTrackQR', 'server_settings.json')
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    data = json.load(f)
+                    saved_path = data.get("PARENT_FOLDER")
+                    if saved_path and os.path.exists(saved_path):
+                        network_dir = os.path.join(saved_path, "laboratory_map")
         except Exception:
-            network_dir = r"Z:\Sample Tracking Tool\laboratory_map"
+            pass
             
         # 1. Check if we already have a working offline cache on the hard drive
         has_cache = (os.path.exists(os.path.join(self.local_map_dir, "map.json")) and 
@@ -213,7 +223,7 @@ class MapViewerWindow:
         ctk.CTkFrame(self.top_hud, width=2, height=24, fg_color=["#d0d0d0", "#33424F"]).pack(side=tk.LEFT, padx=10)
         
         self.heatmap_var = ctk.BooleanVar(value=False)
-        # Custom colors injected to lock the ON state to bright teal, completely fixing the gray bug
+        # Lock active state color to prevent default gray rendering
         self.btn_heatmap = ctk.CTkSwitch(
             self.top_hud, text="Density Heatmap", variable=self.heatmap_var, 
             command=self.toggle_heatmap, font=("Segoe UI", 12, "bold"),
@@ -363,15 +373,15 @@ class MapViewerWindow:
             
             if "verification" in found_loc or "pending" in found_loc:
                 self.open_bottom_sheet("verification queue")
-                self.notify(f"Item '{target.upper()}' found\nin Verification Queue.")
+                self.notify(f"Found in Verification Queue:\n{target.upper()}")
                 self.search_var.set("")
                 return
             
             self.open_bottom_sheet("OTHER")
-            self.notify(f"Item '{target.upper()}' found\nin Unmapped Locations.")
+            self.notify(f"Found in Unmapped Locations:\n{target.upper()}")
             self.search_var.set("")
         else:
-            self.notify(f"Search term '{target}'\nnot found in active inventory.")
+            self.notify(f"Not found in active inventory:\n{target}")
             
     def _flash_zone(self, index, flashes):
         if flashes <= 0:
@@ -734,7 +744,7 @@ class MapViewerWindow:
         self._pan_start_y = event.y
         self._refresh_image_cache() 
 
-    # --- NEW PIL TEXT ROTATION ENGINE (Ported from Creator) ---
+    # Generate rotated text images for map zones
     def _get_rotated_text_image(self, index, zone_name, item_count, font_size, rotation, is_selected=False):
         cache_key = f"{index}_{item_count}_{font_size}_{rotation}_{is_selected}"
         if index in self.text_image_cache and self.text_image_cache[index].get("key") == cache_key:

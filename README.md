@@ -27,7 +27,7 @@ Scan the configuration codes in this exact order (reference `scanner settings to
 Clone the repository and install the required dependencies:
 
 ```bash
-git clone [https://github.com/xParano1d/LabTrackQR.git](https://github.com/xParano1d/LabTrackQR.git)
+git clone https://github.com/xParano1d/LabTrackQR.git
 cd LabTrackQR
 pip install -r requirements.txt
 ```
@@ -41,17 +41,17 @@ Open your terminal in the root project folder (the folder containing `appicon.pn
 
 #### Client:
 ```bash
-PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon="img\iconApp.ico" --add-data "img/*;." --paths src src\Client\main.py --name=LabTrackQR
+python -m PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon="img\iconApp.ico" --add-data "img/*;." --paths src src\Client\main.py --name=LabTrackQR
 ```
 
 #### Server:
 ```bash
-PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon="img\iconApp.ico" --add-data "img/*;." --paths src src\Server\main.py --name=LabTrackQR-Server
+python -m PyInstaller --onefile --noconsole --collect-all customtkinter --collect-all ctkfontawesome --icon="img\iconApp.ico" --add-data "img/*;." --paths src src\Server\main.py --name=LabTrackQR-Server
 ```
 
 ### Map Creator:
 ```bash
-PyInstaller --noconsole --onefile --windowed --icon="img\iconApp.ico" --collect-all customtkinter --collect-all ctkfontawesome --add-data "img\BW_theme.json;." "src\server\mapCreator.py" --name="MapCreator" 
+python -m PyInstaller --noconsole --onefile --windowed --icon="img\iconApp.ico" --collect-all customtkinter --collect-all ctkfontawesome --add-data "img\BW_theme.json;." "src\server\mapCreator.py" --name="MapCreator" 
 ```
 
 **Command Breakdown:**

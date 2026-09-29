@@ -1,6 +1,6 @@
 # overlay.py (SERVER VERSION)
 import customtkinter as ctk
-ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # THE MASTER FIX
+ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # Prevents multi-monitor DPI scaling artifacts
 
 import sys
 import os
@@ -75,11 +75,11 @@ class NotificationManager:
         x = int((screen_w / 2) - (width / 2))
         target_y = int((screen_h / 2) - (height / 2))
         
-        # --- MONKEY PATCH: Hijack the destroy method to animate the exit ---
+        # Override destroy method to inject exit animation
         original_destroy = window.destroy
         def animated_destroy():
             if not window.winfo_exists(): return
-            if getattr(window, 'is_closing_animated', False): return # Prevent double-trigger stutter!
+            if getattr(window, 'is_closing_animated', False): return # Prevent concurrent animation triggers
             window.is_closing_animated = True
             
             def slide_out(current_y, alpha):
@@ -107,7 +107,7 @@ class NotificationManager:
         
         def slide_in(current_y, alpha):
             if not window.winfo_exists(): return
-            if getattr(window, 'is_closing_animated', False): return # Prevent double-trigger stutter!
+            if getattr(window, 'is_closing_animated', False): return # Prevent concurrent animation triggers
             current_y += (target_y - current_y) * 0.35 # Ease in
             alpha = min(1.0, alpha + 0.15)
             window.geometry(f"{width}x{height}+{x}+{int(current_y)}")
@@ -210,7 +210,7 @@ class NotificationManager:
                 if clean_msg:
                     self.spawn_notification(clean_msg)
                     
-                    # --- THE FIX: Auto-close the Employee Directory upon any login event ---
+                   # Auto-close employee directory on successful login
                     if any(trigger in clean_msg for trigger in ["Login Successful", "Session Active", "Temp Login"]):
                         if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
                             self.emp_dir_win.destroy()
@@ -226,7 +226,12 @@ class NotificationManager:
 
     def open_map_creator(self):
         try:
-            subprocess.Popen([sys.executable, "--creator"])
+            # If running from source code (.py), include the script name
+            if sys.argv[0].endswith('.py'):
+                subprocess.Popen([sys.executable, sys.argv[0], "--creator"])
+            # If compiled to an executable, just pass the flag
+            else:
+                subprocess.Popen([sys.executable, "--creator"])
         except Exception as e:
             self.spawn_notification(f"Error launching Creator:\n{e}")
 
@@ -301,7 +306,7 @@ class NotificationManager:
                 parts = folder_name.split("_")
                 display_name = f"{parts[0]}   {parts[1].replace('-', ':')}" if len(parts) == 2 else folder_name
                 
-                # THE FIX: Alternate the row colors exactly like a data table!
+                # Alternate row backgrounds for readability
                 row_bg_color = frame_bg if index % 2 == 0 else win_bg
                 
                 row = ctk.CTkFrame(list_frame, fg_color=row_bg_color, corner_radius=0)
@@ -628,7 +633,7 @@ class NotificationManager:
             icon_lbl = ctk.CTkLabel(top_frame, text="🔔", text_color=theme_color, font=("Segoe UI", 26), width=40)
             icon_lbl.pack(side=tk.LEFT, padx=(5, 10))
             
-        # 6. Text Labels (Mathematically Centered!)
+        # Center text alignment
         text_container = ctk.CTkFrame(top_frame, fg_color="transparent")
         text_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -692,14 +697,13 @@ class NotificationManager:
         window.height = 100
         screen_width = self.root.winfo_screenwidth()
         
-        # --- We must define the final horizontal destination! ---
+        # Calculate target X coordinate
         window.target_x = screen_width - window.width - 20
         
         # 1. Add it to the tracking list first
         self.active_notifications.append(window)
         
-        # 2. Force a recalculation to let the smart engine assign the perfect target_y
-        # This completely ignores any notifications currently sliding off-screen!
+        # Recalculate positions for active notifications
         self.recalculate_positions()
         
         # 3. Start completely off-screen to the right, exactly at its newly calculated height

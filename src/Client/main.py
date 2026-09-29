@@ -1,6 +1,6 @@
 # main.py
 import customtkinter as ctk
-ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # THE MASTER FIX
+ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # Prevents multi-monitor DPI scaling artifacts
 
 import tkinter as tk
 import threading
