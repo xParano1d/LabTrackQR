@@ -85,5 +85,5 @@ CLIENT:
     ✔ one and more login sessions handling @done (9/4/2026, 12:36:12 PM)
     ✔ automatic reloging to AD user after 5 min of inactivity after reloging user @done (9/4/2026, 1:09:53 PM)
     ✔ change init form to normal form with digits/letters etc. (-_()) @critical windows ad setup change 8 digits only @today @done (9/23/2026, 2:30:05 PM)
-☐ config variables expansion @low 
+✔ config variables expansion @low @done (10/6/2026, 12:49:18 PM)
 ☐ prepare instruction for scanner configuration, user manual and documentation @critical
