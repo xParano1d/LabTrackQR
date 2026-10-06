@@ -12,6 +12,8 @@ from config import BASE_PATH
 from PIL import ImageChops
 from datetime import datetime
 from PIL import Image, ImageTk, ImageFont, ImageDraw, ImageFilter
+from config import STALE_SAMPLE_DAYS, UI_AUTO_REFRESH_MS
+from config import BTN_SUCCESS, BTN_SUCCESS_HOVER, BTN_DANGER, BTN_DANGER_HOVER, BTN_WARNING, BTN_WARNING_HOVER, BTN_SECONDARY, BTN_SECONDARY_HOVER
 
 def resource_path(file_name):
     try:
@@ -42,12 +44,17 @@ class MapViewerWindow:
         self.viewer = ctk.CTkToplevel(parent_root)
         self.viewer.title("Laboratory Storage Map")
         
-        width, height = 1400, 850
         self.viewer.update_idletasks()
         screen_w = self.viewer.winfo_screenwidth()
         screen_h = self.viewer.winfo_screenheight()
+        
+        # --- ADAPTIVE SIZING ---
+        # Takes up 85% of the screen, but caps at a maximum of 1400x850 for massive monitors
+        width = min(1400, int(screen_w * 0.85))
+        height = min(850, int(screen_h * 0.85))
+        
         x = int((screen_w / 2) - (width / 2))
-        y = int((screen_h / 2) - (height / 2))
+        y = int((screen_h / 2) - (height / 2) - 50)
         self.viewer.geometry(f"{width}x{height}+{x}+{y}")
         
         try:
@@ -213,7 +220,7 @@ class MapViewerWindow:
         ctk.CTkFrame(self.top_hud, width=2, height=24, fg_color=["#d0d0d0", "#33424F"]).pack(side=tk.LEFT, padx=10)
         
         self.heatmap_var = ctk.BooleanVar(value=False)
-        # Custom colors injected to lock the ON state to bright teal, completely fixing the gray bug
+        # Lock active state color to prevent default gray rendering
         self.btn_heatmap = ctk.CTkSwitch(
             self.top_hud, text="Density Heatmap", variable=self.heatmap_var, 
             command=self.toggle_heatmap, font=("Segoe UI", 12, "bold"),
@@ -518,7 +525,7 @@ class MapViewerWindow:
                 elif "-" in raw_date_str and len(raw_date_str) > 2 and raw_date_str[2] == "-": row_date = datetime.strptime(raw_date_str, "%d-%m-%Y")
                 else: row_date = datetime.strptime(raw_date_str, "%Y-%m-%d")
                 
-                if (now - row_date).days >= 14:
+                if (now - row_date).days >= STALE_SAMPLE_DAYS:
                     is_old = True
             except Exception: pass
             
@@ -734,7 +741,7 @@ class MapViewerWindow:
         self._pan_start_y = event.y
         self._refresh_image_cache() 
 
-    # --- NEW PIL TEXT ROTATION ENGINE (Ported from Creator) ---
+    # Generate rotated text images for map zones
     def _get_rotated_text_image(self, index, zone_name, item_count, font_size, rotation, is_selected=False):
         cache_key = f"{index}_{item_count}_{font_size}_{rotation}_{is_selected}"
         if index in self.text_image_cache and self.text_image_cache[index].get("key") == cache_key:

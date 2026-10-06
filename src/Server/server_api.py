@@ -79,7 +79,7 @@ class LabTrackAPI:
             user = data.get("user", "Unknown")
             is_force_create = data.get("force_create", False)
 
-            # --- THE NEW PAYLOAD VARIABLES ---
+            # Extract extended metadata
             requestor = data.get("requestor", "N/A")
             dept = data.get("functional_dept", "N/A")
             project = data.get("project_number", "N/A")
@@ -156,7 +156,7 @@ class LabTrackAPI:
             except Exception:
                 return jsonify({"results": []})
 
-            # --- THE NEW 8 COLUMNS ---
+            # Define column layout
             cols = ["Date/Day", "Time", "Location", "Sample ID", "Requestor", "Functional Dept", "Project Number", "User"]
             col_idx = cols.index(sort_col) if sort_col in cols else 0
 

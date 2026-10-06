@@ -83,7 +83,7 @@ class CsvStorage:
                 daily_zip = os.path.join(self.local_backup_dir, 'daily', f"{now.strftime('%Y-%m-%d_00-00-00')}.zip")
                 if not os.path.exists(daily_zip): shutil.copy(recent_zip, daily_zip)
                     
-                # 5. AUTO-PRUNING (Keep HDD clean)
+                # Prune old backups based on retention policy
                 self._prune_backups('recent', 30) # Keep last 60 minutes
                 self._prune_backups('hourly', 24) # Keep last 24 hours
                 self._prune_backups('daily', 30)  # Keep last 30 days
@@ -189,7 +189,7 @@ class CsvStorage:
                 writer = csv.writer(f, delimiter=';')
                 writer.writerow(["Date", "Time", "Location", "Sample ID", "Requestor", "Functional Dept", "Project Number", "User"])
         else:
-            # Self-Heal on Startup!
+            # Initialize and sanitize file structure
             self._scrub_file_dates(self.inventory_file)
             
         if not os.path.exists(self.history_dir):
@@ -203,10 +203,10 @@ class CsvStorage:
             with open(filepath, 'r', encoding='utf-8-sig') as f:
                 raw_text = f.read()
         except UnicodeDecodeError:
-            # Excel saved it as ANSI! Rescue the Polish characters using cp1250...
+            # Fallback to cp1250 for Excel ANSI encoding
             with open(filepath, 'r', encoding='cp1250') as f:
                 raw_text = f.read()
-            # ...and immediately self-heal the file back to UTF-8!
+            # Convert file to UTF-8-sig
             with open(filepath, 'w', encoding='utf-8-sig') as f:
                 f.write(raw_text)
                 
@@ -214,7 +214,7 @@ class CsvStorage:
 
     def get_active_file_path(self, file_type, year=None, month=None):
         if file_type == 'inventory':
-            return self.inventory_file # THE FIX: Corrected variable name!
+            return self.inventory_file # Return explicit inventory path
         else:
             if year and month:
                 target_year = year

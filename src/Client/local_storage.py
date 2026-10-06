@@ -5,7 +5,7 @@ from datetime import datetime
 import threading
 import requests
 import csv
-from config import BASE_PATH
+from config import BASE_PATH, QUEUE_PROCESS_INTERVAL, CACHE_UPDATE_INTERVAL, API_TIMEOUT_SHORT, API_TIMEOUT_LONG
 
 class ApiStorage:
     def __init__(self, server_url):
@@ -37,15 +37,15 @@ class ApiStorage:
     def _queue_processor(self):
         """Silently fires queued scans to the Server. If server is down, they wait safely."""
         while True:
-            time.sleep(2) # Check queue every 2 seconds
+            time.sleep(QUEUE_PROCESS_INTERVAL)
             with self.lock:
                 try:
                     with open(self.queue_file, 'r') as f: queue = json.load(f)
                 except json.JSONDecodeError:
                     import shutil
-                    # Back up the corrupted file so you can manually extract the text later
+                    # Archive corrupted queue for manual recovery
                     shutil.copy(self.queue_file, self.queue_file + ".corrupted_backup")
-                    # Reset the live queue so the app doesn't permanently crash
+                    # Initialize empty queue to resume normal operations
                     with open(self.queue_file, 'w') as f: json.dump([], f)
                     queue = []
                 except Exception: 
@@ -57,7 +57,7 @@ class ApiStorage:
             for item in queue:
                 try:
                     endpoint = f"{self.server_url}/api/remove_sample" if item.get('is_removal') else f"{self.server_url}/api/log_sample"
-                    resp = requests.post(endpoint, json=item, timeout=3)
+                    resp = requests.post(endpoint, json=item, timeout=API_TIMEOUT_SHORT)
                     if resp.status_code == 200:
                         successful_items.append(item)
                 except Exception:
@@ -74,17 +74,17 @@ class ApiStorage:
         """Silently downloads a lightweight copy of the active inventory every 30 seconds for offline validation."""
         while True:
             try:
-                resp = requests.get(f"{self.server_url}/api/get_inventory", timeout=5)
+                resp = requests.get(f"{self.server_url}/api/get_inventory", timeout=API_TIMEOUT_LONG)
                 if resp.status_code == 200:
                     with self.lock:
                         with open(self.cache_file, 'w') as f: json.dump(resp.json().get('inventory', []), f)
             except Exception: pass
-            time.sleep(30)
+            time.sleep(CACHE_UPDATE_INTERVAL)
 
     # --- API DATA FETCHING ---
     def get_employees(self):
         try:
-            resp = requests.get(f"{self.server_url}/api/get_employees", timeout=2)
+            resp = requests.get(f"{self.server_url}/api/get_employees", timeout=API_TIMEOUT_SHORT)
             if resp.status_code == 200:
                 emps = resp.json().get('employees', {})
                 self.is_offline_mode = False  # We are online!
@@ -127,7 +127,7 @@ class ApiStorage:
             "last_name": last_name, "ad_username": ad_username
         }
         try:
-            resp = requests.post(f"{self.server_url}/api/add_employee", json=payload, timeout=3)
+            resp = requests.post(f"{self.server_url}/api/add_employee", json=payload, timeout=API_TIMEOUT_SHORT)
             return resp.status_code == 200
         except Exception:
             return False
@@ -206,7 +206,7 @@ class ApiStorage:
         try:
             target_url = getattr(self, 'server_url', "http://127.0.0.1:5000")
             url = f"{target_url}/api/get_archive_months"
-            resp = requests.get(url, timeout=5)
+            resp = requests.get(url, timeout=API_TIMEOUT_LONG)
             if resp.status_code == 200:
                 return resp.json().get("months", [])
         except Exception:
@@ -222,7 +222,7 @@ class ApiStorage:
                 "source": source, "year": year or "", "month": month or "",
                 "sort_col": sort_col, "reverse": str(reverse).lower()
             }
-            resp = requests.get(url, params=params, timeout=10)
+            resp = requests.get(url, params=params, timeout=API_TIMEOUT_LONG)
             if resp.status_code == 200:
                 return resp.json().get("results", [])
         except Exception:

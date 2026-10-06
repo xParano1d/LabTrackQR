@@ -19,6 +19,7 @@ from PIL import Image, ImageTk
 from logviewer import LogViewerWindow
 from mapviewer import MapViewerWindow
 from ctkfontawesome import icon_to_ctkimage
+from config import STALE_SAMPLE_DAYS, RELOG_TIMEOUT_MS, REMOVAL_TIMEOUT_MS, NOTIFICATION_DURATION_MS
 
 try:
     myappid = 'labtrack.qr.desktop.app.1' 
@@ -104,11 +105,11 @@ class NotificationManager:
         x = int((screen_w / 2) - (width / 2))
         target_y = int((screen_h / 2) - (height / 2))
         
-        # --- MONKEY PATCH: Hijack the destroy method to animate the exit ---
+        # Override destroy method to inject exit animation
         original_destroy = window.destroy
         def animated_destroy():
             if not window.winfo_exists(): return
-            if getattr(window, 'is_closing_animated', False): return # Prevent double-trigger stutter!
+            if getattr(window, 'is_closing_animated', False): return # Prevent concurrent animation triggers
             window.is_closing_animated = True
             
             def slide_out(current_y, alpha):
@@ -136,7 +137,7 @@ class NotificationManager:
         
         def slide_in(current_y, alpha):
             if not window.winfo_exists(): return
-            # THE FIX: Instantly kill the entrance animation if the window is ordered to close!
+            # Halt entrance animation if closure is triggered
             if getattr(window, 'is_closing_animated', False): return 
             
             current_y += (target_y - current_y) * 0.35 # Ease in
@@ -351,7 +352,7 @@ class NotificationManager:
                         elif "-" in raw_date_str and len(raw_date_str) > 2 and raw_date_str[2] == "-": row_date = datetime.strptime(raw_date_str, "%d-%m-%Y")
                         else: row_date = datetime.strptime(raw_date_str, "%Y-%m-%d")
                         
-                        if (now - row_date).days >= 14:
+                        if (now - row_date).days >= STALE_SAMPLE_DAYS:
                             stale_count += 1
                     except Exception: pass
                     
@@ -415,7 +416,7 @@ class NotificationManager:
         chk = ctk.CTkCheckBox(win, text="Revert to original user after 5 min of inactivity", variable=revert_var, font=("Segoe UI", 11, "italic"))
         chk.pack(pady=10)
 
-        timeout_id = win.after(15000, lambda: cancel())
+        timeout_id = win.after(RELOG_TIMEOUT_MS, lambda: cancel())
 
         def confirm():
             win.after_cancel(timeout_id)
@@ -679,7 +680,7 @@ class NotificationManager:
         
         ctk.CTkButton(win, text=action_user, text_color=["#d9534f", "#ff6b6b"], font=("Segoe UI", 13, "bold"), width=280, height=32,fg_color=["#f9e6e6", "#4a1c1c"], border_width=2, border_color="#d9534f", corner_radius=4,hover=False).pack(pady=(5, 12))
 
-        timeout_id = win.after(30000, lambda: cancel())
+        timeout_id = win.after(REMOVAL_TIMEOUT_MS, lambda: cancel())
 
         def confirm():
             win.after_cancel(timeout_id)
@@ -784,14 +785,14 @@ class NotificationManager:
 
         # --- SHAKE ANIMATION ---
         def trigger_shake():
-            # Prevent mashing the button while it's already shaking
+            # Prevent concurrent animation triggers
             if getattr(form, 'is_shaking', False): return
             form.is_shaking = True
             
             orig_x = form.winfo_x()
             orig_y = form.winfo_y()
             
-            # The exact pixel offsets to create a snappy left/right shake that decays
+            # Define horizontal offsets for shake animation
             offsets = [12, -12, 10, -10, 6, -6, 3, -3, 0]
             
             def shake_step(step=0):
@@ -856,8 +857,7 @@ class NotificationManager:
         # 1. Semantic Analysis for Colors and Icons
         text_lower = text.lower()
         
-        # --- BULLETPROOF AUTO-CLOSE ---
-        # Instantly close the Badges window any time a login notification is drawn on screen
+        # Auto-close UI components on login
         if any(t in text_lower for t in ["login successful", "session active", "temp login"]):
             if hasattr(self, 'emp_dir_win') and self.emp_dir_win and self.emp_dir_win.winfo_exists():
                 self.emp_dir_win.destroy()
@@ -928,7 +928,7 @@ class NotificationManager:
             icon_lbl = ctk.CTkLabel(top_frame, text="🔔", text_color=theme_color, font=("Segoe UI", 26), width=40)
             icon_lbl.pack(side=tk.LEFT, padx=(5, 10))
             
-        # 6. Text Labels (Mathematically Centered!)
+        # Center text alignment
         text_container = ctk.CTkFrame(top_frame, fg_color="transparent")
         text_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -944,7 +944,7 @@ class NotificationManager:
             ctk.CTkLabel(inner_text, text=lines[2], text_color=text_secondary, font=("Segoe UI", 12, "italic"), anchor="w", justify="left").pack(fill=tk.X)
         
         # 7. Smooth Drain Animation Loop
-        duration_ms = 6500
+        duration_ms = NOTIFICATION_DURATION_MS
         step_ms = 50
         steps = duration_ms // step_ms
         window.current_step = 0
@@ -962,7 +962,7 @@ class NotificationManager:
         self.position_and_show(window)
         
         # 7. Smooth Drain Animation Loop
-        duration_ms = 6500
+        duration_ms = NOTIFICATION_DURATION_MS
         step_ms = 50
         steps = duration_ms // step_ms
         window.current_step = 0
@@ -990,14 +990,13 @@ class NotificationManager:
         window.height = 100
         screen_width = self.root.winfo_screenwidth()
         
-        # --- We must define the final horizontal destination! ---
+        # Calculate target X coordinate
         window.target_x = screen_width - window.width - 20
         
         # 1. Add it to the tracking list first
         self.active_notifications.append(window)
         
-        # 2. Force a recalculation to let the smart engine assign the perfect target_y
-        # This completely ignores any notifications currently sliding off-screen!
+        # Recalculate positions for active notifications
         self.recalculate_positions()
         
         # 3. Start completely off-screen to the right, exactly at its newly calculated height

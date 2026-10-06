@@ -4,6 +4,7 @@ import threading
 import winsound 
 import time
 import re
+from config import SCANNER_IDLE_TIMEOUT, SCANNER_TEMP_USER_REVERT, SCANNER_DEBOUNCE_DELAY, SCANNER_SPAM_SILENCE
 
 class ScannerManager:
     def __init__(self, vids, pids, message_queue, storage):
@@ -62,20 +63,20 @@ class ScannerNode:
         self.current_location = None
         self.pending_samples = []
         self.timeout_timer = None
-        self.TIMEOUT_SECONDS = 10.0
+        self.TIMEOUT_SECONDS = SCANNER_IDLE_TIMEOUT
 
         self.ad_fallback_name = None
         self.revert_timer = None
 
     def _start_ad_revert_timer(self):
-        # 1. BRUTALLY KILL ANY EXISTING TIMER
+        # Cancel existing revert timer
         if self.revert_timer: 
             self.revert_timer.cancel()
             self.revert_timer = None
         
-        # 2. ONLY START A NEW ONE IF THE FLAG IS TRULY ACTIVE
+        # Start new timer if auto-revert is enabled
         if getattr(self, 'auto_revert', False):
-            self.revert_timer = threading.Timer(300.0, self._revert_to_ad) # 300s = 5 minutes
+            self.revert_timer = threading.Timer(SCANNER_TEMP_USER_REVERT, self._revert_to_ad)
             self.revert_timer.start()
 
     def _revert_to_ad(self):
@@ -87,7 +88,7 @@ class ScannerNode:
                 self.revert_timer.cancel()
                 self.revert_timer = None
                 
-            # WIPE THE TEMPORARY USER'S UNSAVED JUNK
+            # Clear temporary user session data
             if self.pending_samples:
                 self.pending_samples.clear()
             self.current_location = None
@@ -151,10 +152,10 @@ class ScannerNode:
                             for scanned_text in scan_parts:
                                 if not scanned_text: continue
                                 
-                                # --- THE GLOBAL MASH DEBOUNCER ---
+                                # Hardware debounce logic
                                 current_time = time.time()
-                                if scanned_text == recent_scan and (current_time - recent_scan_time) < 1.5:
-                                    continue # Silently drop identical rapid-fire scans!
+                                if scanned_text == recent_scan and (current_time - recent_scan_time) < SCANNER_DEBOUNCE_DELAY:
+                                    continue # Ignore duplicate consecutive scans within the debounce window
                                     
                                 recent_scan = scanned_text
                                 recent_scan_time = current_time
@@ -168,7 +169,7 @@ class ScannerNode:
                                     if emp_name:
                                         if self.user == emp_name:
                                             winsound.MessageBeep(winsound.MB_ICONASTERISK)
-                                            if current_time - getattr(self, 'last_same_user_scan', 0) > 5.0:
+                                            if current_time - getattr(self, 'last_same_user_scan', 0) > SCANNER_SPAM_SILENCE:
                                                 self.message_queue.put(f"You are already logged in as:\n{emp_name}.")
                                                 self.last_same_user_scan = current_time
                                         elif self.user and self.user != emp_name:
@@ -190,7 +191,7 @@ class ScannerNode:
                                 self._start_or_refresh_timer()
                                 self._start_ad_revert_timer()
 
-                                # --- THE REMOVAL VALIDATION GATE ---
+                                # Validate sample removal requests
                                 if self.manager and self.manager.removal_mode and scanned_text.startswith("SMP:"):
                                     scanned_text = scanned_text.replace("SMP: ", "SMP:").replace("SMP:", "").strip()
 
@@ -240,7 +241,7 @@ class ScannerNode:
                                         self.storage.save_data_async(location_id=self.current_location, sample_id=scanned_text, user=self.user, message_queue=self.message_queue)
                                         self.current_location = None # Consume the location since it was just used!
                                     else:
-                                        # THE FIX: Long-term deduplication! Don't add it if it's already queued.
+                                        # Prevent duplicate sample queueing
                                         if scanned_text not in self.pending_samples:
                                             self.pending_samples.append(scanned_text)
                                             self.message_queue.put(f"Sample Queued:\n{scanned_text}\n(Scan Location to save)")

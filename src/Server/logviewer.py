@@ -1,6 +1,6 @@
 # logviewer.py
 import customtkinter as ctk
-ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # THE MASTER FIX
+ctk.ScalingTracker.deactivate_automatic_dpi_awareness = True # Prevents multi-monitor DPI scaling artifacts
 
 import tkinter as tk
 from tkinter import ttk
@@ -550,7 +550,7 @@ class LogViewerWindow:
             primary = str(item[0]).strip().lower()
             tie_breaker = str(item[1])
             
-            # --- THE FIX: Teach the sorter to read Polish dates ---
+            # Reformat DD-MM-YYYY to YYYY-MM-DD for chronological sorting
             if re.match(r"^\d{2}-\d{2}-\d{4}", primary):
                 primary = f"{primary[6:10]}-{primary[3:5]}-{primary[0:2]}" + primary[10:]
                 
@@ -711,9 +711,7 @@ class LogViewerWindow:
             is_today = False
             is_closed = 'closed' in loc_lower or 'removed' in loc_lower
             
-            # Instead of looking for "14-day-old logs", the Old filter looks strictly at 
-            # the Active Inventory to find 14-day-old samples. Since closed items 
-            # are deleted from inventory, this is bulletproof!
+            # Calculate sample age against current date to flag overdue items
             if is_active_inventory and row_date:
                 if (now - row_date).days >= 14:
                     is_old = True
